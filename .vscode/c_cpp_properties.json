@@ -2,21 +2,17 @@
     "configurations": [
         {
             "name": "ESP-IDF",
-            "compilerPath": "/Users/mac/esp/esp-idf-v5.1/tools/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc",
-            "includePath": [
-                "${config:idf.espIdfPath}/components/**",
-                "${config:idf.espIdfPathWin}/components/**",
-                "${config:idf.espAdfPath}/components/**",
-                "${config:idf.espAdfPathWin}/components/**",
-                "${workspaceFolder}/**"
-            ],
+            "compilerPath": "",
+            "includePath": [],
             "browse": {
                 "path": [
                     "${config:idf.espIdfPath}/components",
                     "${config:idf.espIdfPathWin}/components",
                     "${config:idf.espAdfPath}/components/**",
                     "${config:idf.espAdfPathWin}/components/**",
-                    "${workspaceFolder}"
+                    "${workspaceFolder}/**",
+                    "~/.espressif/**",
+                    "~/esp/esp-idf/**"
                 ],
                 "limitSymbolsToIncludedHeaders": false
             }

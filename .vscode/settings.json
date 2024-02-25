@@ -1,4 +1,16 @@
 {
   "C_Cpp.intelliSenseEngine": "default",
-  "idf.adapterTargetName": "esp32"
+  "idf.adapterTargetName": "esp32",
+  "files.associations": {
+    "nvs_flash.h": "c",
+    "esp_log.h": "c",
+    "types.h": "c",
+    "gpio.h": "c",
+    "task.h": "c",
+    "event_groups.h": "c",
+    "msp_serial.h": "c",
+    "format": "c",
+    "cstdint": "c"
+  },
+  "idf.flashType": "UART"
 }
