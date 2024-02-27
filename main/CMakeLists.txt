@@ -4,6 +4,7 @@ set(srcs "msp/msp.c" "msp/msp_serial.c"
          "drivers/ble/bluetooth.c"
          "common/queue.c"
          "utils/util.c"
+         "io/led.c"
 )
 
 if(CONFIG_FOO_ENABLE_BAR)
@@ -12,5 +13,5 @@ endif()
 
 idf_component_register(SRCS "main.c" "${srcs}"
                     INCLUDE_DIRS "" "msp" "fc" "drivers" "common"
-                    "drivers/ble" "utils"
+                    "drivers/ble" "utils" "io"
                     )

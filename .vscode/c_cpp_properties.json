@@ -3,7 +3,15 @@
         {
             "name": "ESP-IDF",
             "compilerPath": "",
-            "includePath": [],
+            "includePath": [
+                "${config:idf.espIdfPath}/components/**",
+                "${config:idf.espIdfPathWin}/components/**",
+                "${config:idf.espAdfPath}/components/**",
+                "${config:idf.espAdfPathWin}/components/**",
+                "${workspaceFolder}/**",
+                "~/.espressif/**",
+                "~/esp/esp-idf/**"
+            ],
             "browse": {
                 "path": [
                     "${config:idf.espIdfPath}/components",
@@ -15,7 +23,8 @@
                     "~/esp/esp-idf/**"
                 ],
                 "limitSymbolsToIncludedHeaders": false
-            }
+            },
+            "cStandard": "c23"
         }
     ],
     "version": 4

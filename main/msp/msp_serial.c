@@ -54,7 +54,7 @@ static void openSerial(void* arg)
             continue;
         }
 
-        sendByBt((const char*)buffer, len);
+        // sendByBt((const char*)buffer, len);
 
         static uint8_t payload[255];
         uint16_t command = 0, payload_len = 0;
