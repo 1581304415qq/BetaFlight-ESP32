@@ -4,25 +4,33 @@
 #include "msp.h"
 #include "msp_serial.h"
 #include "msp_protocol.h"
+#include "msp_protocol_v2_betaflight.h"
 #include "system.h"
 #include "bluetooth.h"
 #include "stdbool.h"
 #include "msp_data.h"
+#include "msp.h"
 #include "init.h"
 #include "util.h"
 #include "led.h"
 
 #define FC_VARIANT "BTFL"
 
-static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadLen) {
+typedef bool (*RegisterMspEventCallack)(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len);
+
+static RegisterMspEventCallack registerMspEventCallack[0x3FFF] = { 0 };
+
+static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload, uint16_t payloadLen) {
+    BT_LOG("ver=%u, com=%u\n", version, command);
+
     bool handle = true;
     static uint8_t dst[300] = { 0 };
-    uint8_t payload_buf[256] = { 0 };
     uint16_t dst_len = 0;
-    int payload_len = 0;
+    uint8_t reply_buf[256] = { 0 };
+    uint16_t reply_len = 0;
     msp_message_t msp_message;
     msp_message.command = command;
-    msp_message.header.protocol_version = 0;
+    msp_message.header.protocol_version = version;
     msp_message.header.direction_flag = '>';
 
     switch (command) {
@@ -33,12 +41,12 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         api_version.api_version_major = 1;
         api_version.api_version_minor = 46;
 
-        payload_len = sizeof(msp_api_version_t);
-        memcpy(payload_buf, &api_version, payload_len);
+        reply_len = sizeof(msp_api_version_t);
+        memcpy(reply_buf, &api_version, reply_len);
         break;
 
     case MSP_FC_VARIANT:
-        payload_len = snprintf((char*)payload_buf, 256, "%s", FC_VARIANT);
+        reply_len = snprintf((char*)reply_buf, 256, "%s", FC_VARIANT);
 
         break;
 
@@ -49,15 +57,15 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         fc_version.fc_version_minor = 5;
         fc_version.fc_version_patch_level = 0;
 
-        payload_len = sizeof(msp_fc_version_t);
-        memcpy(payload_buf, &fc_version, payload_len);
+        reply_len = sizeof(msp_fc_version_t);
+        memcpy(reply_buf, &fc_version, reply_len);
 
         break;
 
     case MSP_BOARD_INFO:
-        int boardIdentifier = 123;
+        int boardIdentifier = 23;
         uint16_t hardwareRevision = 1;
-        payload_len = snprintf((char*)payload_buf, 256, "%d%hu%u", boardIdentifier, hardwareRevision, 0);
+        reply_len = snprintf((char*)reply_buf, 256, "%d%hu%u", boardIdentifier, hardwareRevision, 0);
 
         break;
 
@@ -65,15 +73,14 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         char* buildDate = "Feb 25 2024";
         char* buildTime = "12:25:28";
         char* shortGitRevision = "0.02.01";
-        payload_len = snprintf((char*)payload_buf, 256, "%s%s%s", buildDate, buildTime, shortGitRevision);
+        reply_len = snprintf((char*)reply_buf, 256, "%s%s%s", buildDate, buildTime, shortGitRevision);
         break;
 
     case MSP_NAME:
 #define CRAFT_NAME "YAMATO-FLIGHT"
-        payload_len = strlen(CRAFT_NAME);
-        memcpy(payload_buf, (char*)CRAFT_NAME, payload_len);
+        reply_len = strlen(CRAFT_NAME);
+        memcpy(reply_buf, (char*)CRAFT_NAME, reply_len);
         break;
-
 
         //   COMMAND
 
@@ -90,8 +97,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         mspBatteryConfig.vbatMax = 0;
         mspBatteryConfig.vbatWarn = 0;
 
-        payload_len = sizeof(mspBatteryConfig_t);
-        memcpy(payload_buf, &mspBatteryConfig, payload_len);
+        reply_len = sizeof(mspBatteryConfig_t);
+        memcpy(reply_buf, &mspBatteryConfig, reply_len);
         break;
 
     case MSP_SET_BATTERY_CONFIG:
@@ -113,8 +120,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_current_meter_config.adcScale = 123;
         msp_current_meter_config.adcOffset = 0;
 
-        payload_len = sizeof(msp_current_meter_config_t);
-        memcpy(payload_buf, &msp_current_meter_config, payload_len);
+        reply_len = sizeof(msp_current_meter_config_t);
+        memcpy(reply_buf, &msp_current_meter_config, reply_len);
         break;
     case MSP_SET_CURRENT_METER_CONFIG:
         // todo 设置电流表配置
@@ -122,16 +129,16 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
 
     case MSP_LED_COLORS:
 #define LED_CONFIGURABLE_COLOR_COUNT 16
-        msp_led_colors_t msp_led_colors[LED_CONFIGURABLE_COLOR_COUNT];
+        hsvColor_t led_colors[LED_CONFIGURABLE_COLOR_COUNT];
         for (uint8_t i = 0; i < LED_CONFIGURABLE_COLOR_COUNT; i++)
         {
-            msp_led_colors[i].h = 233;
-            msp_led_colors[i].s = 2;
-            msp_led_colors[i].v = 45;
+            led_colors[i].hue = 233;
+            led_colors[i].saturation = 2;
+            led_colors[i].value = 45;
         }
 
-        payload_len = LED_CONFIGURABLE_COLOR_COUNT * sizeof(msp_led_colors_t);
-        memcpy(payload_buf, msp_led_colors, payload_len);
+        reply_len = LED_CONFIGURABLE_COLOR_COUNT * sizeof(hsvColor_t);
+        memcpy(reply_buf, led_colors, reply_len);
         break;
 
     case MSP_SET_LED_COLORS:
@@ -156,8 +163,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
             voltage_sensor_adc.mspVoltageMeterConfig[i].vbatresdivmultiplier = 2;
         }
 
-        payload_len = 1 + voltage_sensor_adc.maxVoltageSensorADC + sizeof(msp_voltage_meter_config_t);
-        memcpy(payload_buf, &voltage_sensor_adc, payload_len);
+        reply_len = 1 + voltage_sensor_adc.maxVoltageSensorADC + sizeof(msp_voltage_meter_config_t);
+        memcpy(reply_buf, &voltage_sensor_adc, reply_len);
         break;
 
     case MSP_SET_VOLTAGE_METER_CONFIG:
@@ -173,8 +180,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_acc_trim.pitch = 22;
         msp_acc_trim.roll = 33;
 
-        payload_len = sizeof(msp_acc_trim_t);
-        memcpy(payload_buf, &msp_acc_trim, payload_len);
+        reply_len = sizeof(msp_acc_trim_t);
+        memcpy(reply_buf, &msp_acc_trim, reply_len);
         break;
 
     case MSP_MIXER_CONFIG:
@@ -182,15 +189,23 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_mixer_config.mixer_mode = 1;
         msp_mixer_config.yaw_motors_reversed = 1;
 
-        payload_len = sizeof(msp_mixer_config_t);
-        memcpy(payload_buf, &msp_mixer_config, payload_len);
+        reply_len = sizeof(msp_mixer_config_t);
+        memcpy(reply_buf, &msp_mixer_config, reply_len);
         break;
 
 
     case MSP_SONAR_ALTITUDE:
         uint32_t sonarAltitude = 230;
-        payload_len = sizeof(uint32_t);
-        memcpy(payload_buf, &sonarAltitude, payload_len);
+        reply_len = sizeof(uint32_t);
+        memcpy(reply_buf, &sonarAltitude, reply_len);
+        break;
+
+    case MSP_PID_ADVANCED:
+        msp_pidProfile_t msp_pidProfile;
+        msp_pidProfile.pidF[0] = 2;
+
+        reply_len = sizeof(msp_pidProfile_t);
+        memcpy(reply_buf, &msp_pidProfile, reply_len);
         break;
 
     case MSP_SET_RTC:
@@ -198,6 +213,7 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         uint16_t millis = readU16(payload, 4);
         break;
 
+    case MSP_STATUS_EX:
     case MSP_STATUS:
         msp_status_t msp_status = { 0 };
         msp_status.taskDeltaTimeUs = 28;
@@ -213,11 +229,11 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_status.averageSystemLoad = 24;
         msp_status.pidProfileCount = 13;
         msp_status.coreTemperature = 65;
-        msp_status.pidProfileCount = 4;
-        msp_status.currentControlRateProfileIndex = 3;
+        msp_status.pidProfileCount = -1;
+        msp_status.currentControlRateProfileIndex = -1;
 
-        payload_len = sizeof(msp_status_t);
-        memcpy(payload_buf, &msp_status, payload_len);
+        reply_len = sizeof(msp_status_t);
+        memcpy(reply_buf, &msp_status, reply_len);
         break;
 
     case MSP_RAW_IMU:
@@ -229,8 +245,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
             msp_raw_imu.mag[i] = 225;
         }
 
-        payload_len = sizeof(msp_raw_imu_t);
-        memcpy(payload_buf, &msp_raw_imu, payload_len);
+        reply_len = sizeof(msp_raw_imu_t);
+        memcpy(reply_buf, &msp_raw_imu, reply_len);
 
         break;
 
@@ -245,8 +261,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_raw_gps.course = 5.9;
         msp_raw_gps.hdop = 0;
 
-        payload_len = sizeof(msp_raw_gps_t);
-        memcpy(payload_buf, &msp_raw_gps, payload_len);
+        reply_len = sizeof(msp_raw_gps_t);
+        memcpy(reply_buf, &msp_raw_gps, reply_len);
         break;
 
     case MSP_COMP_GPS:
@@ -255,8 +271,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_comp_gps.directionToHome = 10;
         msp_comp_gps.update = 1;
 
-        payload_len = sizeof(msp_comp_gps_t);
-        memcpy(payload_buf, &msp_comp_gps, payload_len);
+        reply_len = sizeof(msp_comp_gps_t);
+        memcpy(reply_buf, &msp_comp_gps, reply_len);
         break;
 
     case MSP_GPSSVINFO:
@@ -270,8 +286,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
             gps_svinfo.svinfo[i].cno = 7;
         }
 
-        payload_len = 1 + gps_svinfo.numChannel * sizeof(svinfo_t);
-        memcpy(payload_buf, &gps_svinfo, payload_len);
+        reply_len = 1 + gps_svinfo.numChannel * sizeof(svinfo_t);
+        memcpy(reply_buf, &gps_svinfo, reply_len);
         break;
 
     case MSP_RC:
@@ -281,8 +297,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
             mspRcData[i].value = 11;
         }
 
-        payload_len = channelCount * sizeof(mspRcData_t);
-        memcpy(payload_buf, mspRcData, payload_len);
+        reply_len = channelCount * sizeof(mspRcData_t);
+        memcpy(reply_buf, mspRcData, reply_len);
         break;
 
 
@@ -292,8 +308,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_attitude.pitch = 560;
         msp_attitude.yaw = 123;
 
-        payload_len = sizeof(msp_attitude_t);
-        memcpy(payload_buf, &msp_attitude, payload_len);
+        reply_len = sizeof(msp_attitude_t);
+        memcpy(reply_buf, &msp_attitude, reply_len);
         break;
 
     case MSP_ALTITUDE:
@@ -301,8 +317,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_altitude.estimatedAltitudeCm = 5767;
         msp_altitude.estimatedVario = 124;
 
-        payload_len = sizeof(msp_altitude_t);
-        memcpy(payload_buf, &msp_altitude, payload_len);
+        reply_len = sizeof(msp_altitude_t);
+        memcpy(reply_buf, &msp_altitude, reply_len);
         break;
 
     case MSP_ANALOG:
@@ -313,20 +329,25 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_analog.rssi = 254;
         msp_analog.amperage = 123;
 
-        payload_len = sizeof(msp_analog_t);
-        memcpy(payload_buf, &msp_analog, payload_len);
+        reply_len = sizeof(msp_analog_t);
+        memcpy(reply_buf, &msp_analog, reply_len);
         break;
 
     case MSP_BOXNAMES:
         const int page = payloadLen > 0 ? readU8(payload, 0) : 0;
 
         char boxs_name[] = "www;eee;fff;";
-        payload_len = strlen(boxs_name);
-        memcpy(payload_buf, boxs_name, payload_len);
+        reply_len = strlen(boxs_name);
+        memcpy(reply_buf, boxs_name, reply_len);
         break;
 
 
 
+    case MSP_LED_STRIP_MODECOLOR:
+#define LED_AUX_CHANNEL 11
+        msp_ledStripConfig_t msp_ledStripConfig;
+
+        break;
     case MSP_VOLTAGE_METERS:
 #define supportedVoltageMeterCount  2
         msp_voltageMeter_t msp_voltageMeter[supportedVoltageMeterCount];
@@ -336,8 +357,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
             msp_voltageMeter[i].displayFiltered = 1234 + i;
         }
 
-        payload_len = supportedVoltageMeterCount * sizeof(msp_voltageMeter_t);
-        memcpy(payload_buf, msp_voltageMeter, payload_len);
+        reply_len = supportedVoltageMeterCount * sizeof(msp_voltageMeter_t);
+        memcpy(reply_buf, msp_voltageMeter, reply_len);
         break;
 
     case MSP_CURRENT_METERS:
@@ -350,8 +371,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
             msp_currentMeter[i].amperage = 1237;
         }
 
-        payload_len = supportedCurrentMeterCount * sizeof(msp_currentMeter_t);
-        memcpy(payload_buf, msp_currentMeter, payload_len);
+        reply_len = supportedCurrentMeterCount * sizeof(msp_currentMeter_t);
+        memcpy(reply_buf, msp_currentMeter, reply_len);
         break;
 
     case MSP_BATTERY_STATE:
@@ -364,8 +385,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_batteryState.batteryState = 2;
         msp_batteryState.batteryVoltage = 1200;
 
-        payload_len = sizeof(msp_batteryState_t);
-        memcpy(payload_buf, &msp_batteryState, payload_len);
+        reply_len = sizeof(msp_batteryState_t);
+        memcpy(reply_buf, &msp_batteryState, reply_len);
         break;
 
 
@@ -381,16 +402,16 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         msp_uid.id_2 = 1;
         msp_uid.id_3 = 2;
 
-        payload_len = sizeof(msp_uid_t);
-        memcpy(payload_buf, &msp_uid, payload_len);
+        reply_len = sizeof(msp_uid_t);
+        memcpy(reply_buf, &msp_uid, reply_len);
         break;
 
 #define MAX_SUPPORTED_SERVOS 8
     case MSP_SERVO:
         uint16_t servo[8] = { 0 };
 
-        payload_len = MAX_SUPPORTED_SERVOS * 2;
-        memcpy(payload_buf, servo, payload_len);
+        reply_len = MAX_SUPPORTED_SERVOS * 2;
+        memcpy(reply_buf, servo, reply_len);
         break;
 
     case MSP_SERVO_CONFIGURATIONS:
@@ -404,8 +425,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
             msp_Servo_configurations[i].reversedSources = 12;
         }
 
-        payload_len = MAX_SUPPORTED_SERVOS * sizeof(msp_servo_configurations_t);
-        memcpy(payload_buf, msp_Servo_configurations, payload_len);
+        reply_len = MAX_SUPPORTED_SERVOS * sizeof(msp_servo_configurations_t);
+        memcpy(reply_buf, msp_Servo_configurations, reply_len);
         break;
 
     case MSP_SET_SERVO_CONFIGURATION:
@@ -424,8 +445,8 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
             mspCustomServoMixer[i].max = 13;
             mspCustomServoMixer[i].box = 13;
         }
-        payload_len = MAX_SERVO_RULES * sizeof(mspCustomServoMixer_t);
-        memcpy(payload_buf, mspCustomServoMixer, payload_len);
+        reply_len = MAX_SERVO_RULES * sizeof(mspCustomServoMixer_t);
+        memcpy(reply_buf, mspCustomServoMixer, reply_len);
 
         break;
 
@@ -439,28 +460,72 @@ static void mspCommonProcess(uint8_t command, uint8_t* payload, uint8_t payloadL
         debugValue.value[2] = 6;
         debugValue.value[3] = 5;
 
-        payload_len = sizeof(debugValue_t);
-        memcpy(payload_buf, (uint8_t*)&debugValue, payload_len);
+        reply_len = sizeof(debugValue_t);
+        memcpy(reply_buf, (uint8_t*)&debugValue, reply_len);
         break;
 
     default:
         handle = false;
-        break;
+        if (registerMspEventCallack[command])
+            handle = registerMspEventCallack[command](payload, payloadLen, reply_buf, &reply_len);
     }
 
     if (handle) {
-        msp_message.payload = payload_buf;
-        msp_message.payload_size = payload_len;
+        msp_message.payload = reply_buf;
+        msp_message.payload_size = reply_len;
         dst_len = packMessage(&msp_message, dst, sizeof(dst));
         serialWrite(dst, dst_len);
     }
     else
-        sendByBt((char*)&command, 1);
+        BT_LOG("ver=%u, com=%u", version, command);
 
 }
 
-void registerMspEvent() {
+void registerMspEvent(uint16_t eventType, RegisterMspEventCallack callback) {
+    if (!registerMspEventCallack[eventType])registerMspEventCallack[eventType] = callback;
+    else printf("duplicate registration msp event");
+}
+
+void unregisterMspEvent(uint16_t eventType, RegisterMspEventCallack callback) {
+    if (registerMspEventCallack[eventType] == callback) registerMspEventCallack[eventType] = NULL;
+}
+
+
+
+bool betaflight_bind_event(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len) {
+    return false;
+}
+
+bool motor_output_reordering_event(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len) {
+    return false;
+}
+bool set_motor_output_reordering_event(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len) {
+    return false;
+}
+bool send_dshot_command_event(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len) {
+    return false;
+}
+bool get_vtx_device_status_event(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len) {
+    return false;
+}
+bool get_osd_warnings_event(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len) {
+    return false;
+}
+bool get_text_event(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len) {
+    return false;
+}
+
+void initMspEvent() {
     mspRegisterFn(mspCommonProcess);
+
+    // registerMspEvent(MSP2_BETAFLIGHT_BIND, betaflight_bind_event);
+    // registerMspEvent(MSP2_MOTOR_OUTPUT_REORDERING, motor_output_reordering_event);
+    // registerMspEvent(MSP2_SET_MOTOR_OUTPUT_REORDERING, set_motor_output_reordering_event);
+    // registerMspEvent(MSP2_SEND_DSHOT_COMMAND, send_dshot_command_event);
+    // registerMspEvent(MSP2_GET_VTX_DEVICE_STATUS, get_vtx_device_status_event);
+    // registerMspEvent(MSP2_GET_OSD_WARNINGS, get_osd_warnings_event);
+    // registerMspEvent(MSP2_GET_TEXT, get_text_event);
+    
 }
 
 void init(void) {
@@ -474,6 +539,6 @@ void init(void) {
     mspInit();
     mspSerialInit();
 
-    registerMspEvent();
+    initMspEvent();
 
 }

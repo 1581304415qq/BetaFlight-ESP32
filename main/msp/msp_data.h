@@ -41,21 +41,23 @@ typedef struct
 
     uint8_t currentControlRateProfileIndex;
 
+    uint8_t byteCount;
+    // flightModeFlags + 4
+
     uint8_t armingDisableFlagsCount;
     uint32_t armingDisableFlags;
 
-    uint8_t rebootRequired : 1; // 1位
-
+    uint8_t rebootRequired;
     uint16_t coreTemperature; // CPU温度
 
 } __attribute__((packed)) msp_status_t;
 
 
 typedef struct {
-    uint16_t h;
-    uint8_t s;
-    uint8_t v;
-} __attribute__((packed)) msp_led_colors_t;
+    uint16_t hue;
+    uint8_t saturation;
+    uint8_t value;
+} __attribute__((packed)) hsvColor_t;
 
 // MSP_RAW_IMU
 typedef struct {
@@ -259,3 +261,127 @@ typedef struct customServoMixer_s {
 typedef struct {
     uint16_t value;
 } __attribute__((packed)) mspRcData_t;
+
+
+#define LED_MODE_COUNT 6
+#define LED_DIRECTION_COUNT 6
+#define LED_SPECIAL_COLOR_COUNT 11
+typedef struct {
+    hsvColor_t modeColors[LED_MODE_COUNT][LED_DIRECTION_COUNT];
+    hsvColor_t specialColors[LED_SPECIAL_COLOR_COUNT];
+
+    uint8_t auxChannel;
+    uint8_t flag;
+    uint8_t ledstrip_aux_channel;
+
+}  __attribute__((packed)) msp_ledStripConfig_t;
+
+
+typedef struct {
+    uint16_t flag1;
+    uint16_t flag2;
+    // yaw_p_limit - yaw P限制
+    uint16_t yaw_p_limit;
+    uint8_t flag4;
+    // 电池电压PID补偿
+    uint8_t vbatPidCompensation;
+
+    // feedforward_transition - 前馈过渡
+    uint8_t feedforward_transition;
+
+    uint8_t flag6;
+    uint8_t flag7;
+    uint8_t flag8;
+    uint8_t flag9;
+
+    // rateAccelLimit - 角速度加速度限制 
+    uint16_t rateAccelLimit;
+    // yawRateAccelLimit - 偏航角速度加速度限制
+    uint16_t yawRateAccelLimit;
+    // angle_limit - 角度限制
+    uint8_t angle_limit;
+
+    uint8_t levelSensitivity;
+    // itermThrottleThreshold - 油门积分项阈值 
+    uint16_t itermThrottleThreshold;
+    // anti_gravity_gain - 反重力增益
+    uint16_t anti_gravity_gain;
+    uint16_t dtermSetpointWeight;
+
+    // iterm_rotation - 积分项旋转
+    uint8_t iterm_rotation;
+    uint8_t smart_feedforward;
+
+    // iterm_relax - 积分项放松
+    uint8_t iterm_relax;
+
+    // iterm_relax_type - 积分项放松类型
+    uint8_t iterm_relax_type;
+
+    // abs_control_gain - 绝对控制增益
+    uint8_t abs_control_gain;
+
+    // throttle_boost - 油门提升
+    uint8_t throttle_boost;
+
+    // acro_trainer_angle_limit - 特技飞行训练角度限制
+    uint8_t acro_trainer_angle_limit;
+
+    // pidF[3] - PID F项比例因子数组(Roll/Pitch/Yaw)
+    uint16_t pidF[3];
+    uint8_t antiGravityMode;
+
+    // d_min[3] - D最小值数组(Roll/Pitch/Yaw) 
+    uint8_t d_min[3];
+
+    // d_min_gain - D最小值增益
+    uint8_t d_min_gain;
+
+    // d_min_advance - D最小值提前量
+    uint8_t d_min_advance;
+
+    // use_integrated_yaw - 使用集成式偏航
+    uint8_t use_integrated_yaw;
+
+    // integrated_yaw_relax - 集成式偏航放松  
+    uint8_t integrated_yaw_relax;
+
+    uint8_t iterm_relax_cutoff;
+
+    // motor_output_limit - 电机输出限制
+    uint8_t motor_output_limit;
+
+    // auto_profile_cell_count - 自动适配电池节数
+    uint8_t auto_profile_cell_count;
+
+    // dyn_idle_min_rpm - 动态空闲最低转速
+    uint8_t dyn_idle_min_rpm;
+
+    // feedforward_averaging - 前馈平均
+    uint8_t feedforward_averaging;
+
+    // feedforward_smooth_factor - 前馈平滑因子
+    uint8_t feedforward_smooth_factor;
+
+    // feedforward_boost - 前馈增强  
+    uint8_t feedforward_boost;
+
+    // feedforward_max_rate_limit - 前馈最大速率限制
+    uint8_t feedforward_max_rate_limit;
+
+    // feedforward_jitter_factor - 前馈抖动因子
+    uint8_t feedforward_jitter_factor;
+
+    // vbat_sag_compensation - 电池电压下降补偿
+    uint8_t vbat_sag_compensation;
+
+    // thrustLinearization - 推力线性化
+    uint8_t thrustLinearization;
+
+    // tpa_mode - TPA模式  
+    uint8_t tpa_mode;
+
+    // tpa_rate - TPA速率
+    uint8_t tpa_rate;
+    uint16_t tpa_breakpoint;
+}__attribute__((packed)) msp_pidProfile_t;

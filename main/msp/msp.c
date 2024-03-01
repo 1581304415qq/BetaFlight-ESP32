@@ -3,6 +3,22 @@
 #include <stdbool.h>
 #include "msp.h"
 
+#define crc8_dvb_s2(crc, a)        crc8_calc(crc, a, 0xD5)
+
+uint8_t crc8_calc(uint8_t crc, unsigned char a, uint8_t poly)
+{
+    crc ^= a;
+    for (int ii = 0; ii < 8; ++ii) {
+        if (crc & 0x80) {
+            crc = (crc << 1) ^ poly;
+        }
+        else {
+            crc = crc << 1;
+        }
+    }
+    return crc;
+}
+
 // <preamble>,<direction>,<size>,<command>,,<crc>
 // $, M, <, size(1), command, payload(0-255), checksum 
 int parse_msp_packet(const uint8_t* packet, uint8_t packet_len, msp_header_t* header, uint16_t* command, uint16_t* payload_len, uint8_t* payload) {
@@ -31,33 +47,22 @@ int parse_msp_packet(const uint8_t* packet, uint8_t packet_len, msp_header_t* he
     }
     header->direction_flag = packet[2];
 
-    // <size>, <command> and each data byte into a zero'ed sum
-    uint8_t checksum = 0;
-    for (uint8_t i = 3; i < packet_len - 1; i++) {
-        checksum ^= packet[i];
-    }
-
-    if (checksum != packet[packet_len - 1]) {
-        // 校验和错误
-        printf("check_sum=%x\n", checksum);
-        return 4;
-    }
-
     // 检查V1 or V2_Over_V1
 #define MSP_V2_FRAME_ID 255
     if (packet[3] >= 6 && packet[4] == MSP_V2_FRAME_ID) {
         packet_version = MSP_V2_OVER_V1;
     }
     header->protocol_version = packet_version;
+    printf("MSP VERSION = %d\n", packet_version);
 
     if (packet_version == MSP_V1)
     {
         *payload_len = packet[3];
         *command = packet[4];
 
-        if (*payload_len + 6 != packet_len) {
+        if (*payload_len + 6 > packet_len) {
             // 数据包长度错误
-            printf("payload %d %d\n", *payload_len, packet_len);
+            printf("payload_len=%d packet_len=%d\n", *payload_len, packet_len);
             return 5;
         }
 
@@ -67,8 +72,8 @@ int parse_msp_packet(const uint8_t* packet, uint8_t packet_len, msp_header_t* he
     }
     else if (packet_version == MSP_V2_NATIVE) {
         uint8_t flag = packet[3];
-        *command = packet[4] << 8 | packet[5];
-        *payload_len = packet[6] << 8 | packet[7];
+        *command = packet[5] << 8 | packet[4];
+        *payload_len = packet[7] << 8 | packet[6];
 
         if (*payload_len + 9 != packet_len) {
             // 数据包长度错误
@@ -84,7 +89,22 @@ int parse_msp_packet(const uint8_t* packet, uint8_t packet_len, msp_header_t* he
         uint8_t flag = packet[5];
         *command = packet[6] << 8 | packet[7];
         *payload_len = packet[8] << 8 | packet[9];
+    }
 
+    // <size>, <command> and each data byte into a zero'ed sum
+    uint8_t checksum = 0;
+    for (uint8_t i = 3; i < (*payload_len + 5); i++) {
+        if (packet_version == MSP_V1)
+            checksum ^= packet[i];
+
+        else if (packet_version == MSP_V2_NATIVE)
+            checksum = crc8_dvb_s2(checksum, packet[i]);
+    }
+
+    if (packet_version == MSP_V1 && checksum != packet[*payload_len + 5]) {
+        // 校验和错误
+        printf("CHECK_SUM = %x\n", checksum);
+        return 4;
     }
 
 
@@ -95,18 +115,29 @@ int parse_msp_packet(const uint8_t* packet, uint8_t packet_len, msp_header_t* he
 uint8_t calculateChecksum(msp_message_t* message) {
     uint16_t i;
     uint8_t checksum = 0;
-    // uint8_t* ptr = (uint8_t*)&message->header.direction_flag;
+    if (message->header.protocol_version == 0) {
+        checksum ^= message->payload_size;
+        checksum ^= message->command;
 
-    // for (i = 0; i < sizeof(msp_header_t) + sizeof(message->command) + sizeof(message->payload_size); i++) {
-    //     checksum ^= *ptr++;
-    // }
-    checksum ^= message->payload_size;
-    checksum ^= message->command;
-
-    if (message->payload) {
-        for (i = 0; i < message->payload_size; i++) {
-            checksum ^= message->payload[i];
+        if (message->payload) {
+            for (i = 0; i < message->payload_size; i++) {
+                checksum ^= message->payload[i];
+            }
         }
+    }
+    else if (message->header.protocol_version == 2) {
+        // printf("x=%02x, %02x\n", (uint8_t)(message->command >> 8), (uint8_t)message->command);
+        checksum = crc8_dvb_s2((uint8_t)message->command, checksum);
+        checksum = crc8_dvb_s2((uint8_t)(message->command >> 8), checksum);
+        checksum = crc8_dvb_s2((uint8_t)message->payload_size, checksum);
+        checksum = crc8_dvb_s2((uint8_t)(message->payload_size>>8), checksum);
+
+        if (message->payload) {
+            for (i = 0; i < message->payload_size; i++) {
+                checksum = crc8_dvb_s2(message->payload[i], checksum);
+            }
+        }
+        printf("sum=%02x\n", checksum);
     }
 
     return checksum;
@@ -115,15 +146,31 @@ uint8_t calculateChecksum(msp_message_t* message) {
 // MSP 消息打包
 uint16_t packMessage(msp_message_t* message, uint8_t* buffer, uint16_t buffer_size) {
     uint16_t offset = 0;
-
-    if (buffer_size < sizeof(msp_header_t) + sizeof(message->command) + sizeof(message->payload_size) + message->payload_size + 1) {
+    printf("ver=%d, len=%u\n", message->header.protocol_version,message->payload_size);
+    if (message->header.protocol_version == 0 &&
+        buffer_size < 6 + message->payload_size) {
+        // 缓冲区太小
+        return 0;
+    }
+    else if (message->header.protocol_version == 1 &&
+        buffer_size < 12 + message->payload_size) {
+        // 缓冲区太小
+        return 0;
+    }
+    else if (message->header.protocol_version == 2 &&
+        buffer_size < 9 + message->payload_size) {
         // 缓冲区太小
         return 0;
     }
 
     // 写入消息头
     buffer[offset++] = '$';
-    buffer[offset++] = 'M';
+    if (message->header.protocol_version == 0)
+        buffer[offset++] = 'M';
+    if (message->header.protocol_version == 1)
+        buffer[offset++] = 'M';
+    if (message->header.protocol_version == 2)
+        buffer[offset++] = 'X';
     buffer[offset++] = message->header.direction_flag;
 
     // 写入命令和有效载荷大小
@@ -131,12 +178,14 @@ uint16_t packMessage(msp_message_t* message, uint8_t* buffer, uint16_t buffer_si
         buffer[offset++] = message->payload_size;
         buffer[offset++] = message->command;
     }
-    else if (message->header.protocol_version == 1) {
-        buffer[offset++] = (message->payload_size >> 8) & 0xFF;
-        buffer[offset++] = message->payload_size & 0xFF;
+    else if (message->header.protocol_version == 2) {
+        buffer[offset++] = 0x00; // flag
 
-        buffer[offset++] = (message->command >> 8) & 0xFF;
-        buffer[offset++] = message->command & 0xFF;
+        buffer[offset++] = message->command;
+        buffer[offset++] = (message->command >> 8);
+
+        buffer[offset++] = message->payload_size;
+        buffer[offset++] = (message->payload_size >> 8);
     }
     // 写入有效载荷
     if (message->payload) {
@@ -146,10 +195,16 @@ uint16_t packMessage(msp_message_t* message, uint8_t* buffer, uint16_t buffer_si
     }
 
     // 写入校验和
-    buffer[offset++] = calculateChecksum(message);
+    if (message->header.protocol_version == 0)
+        buffer[offset++] = calculateChecksum(message);
+    else if (message->header.protocol_version == 2){}
+        buffer[offset++] = calculateChecksum(message);
 
     return offset;
 }
+
+
+
 
 void mspInit(void) {
 

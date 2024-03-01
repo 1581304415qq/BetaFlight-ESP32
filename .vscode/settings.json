@@ -12,7 +12,11 @@
     "format": "c",
     "cstdint": "c",
     "stdint.h": "c",
-    "freertos.h": "c"
+    "freertos.h": "c",
+    "compare": "c",
+    "esp_bt.h": "c",
+    "esp_gap_ble_api.h": "c",
+    "esp_gatt_common_api.h": "c"
   },
   "idf.flashType": "UART"
 }

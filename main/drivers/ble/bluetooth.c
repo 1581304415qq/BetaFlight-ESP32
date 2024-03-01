@@ -1,3 +1,4 @@
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -9,7 +10,6 @@
 #include "esp_bt_defs.h"
 #include "esp_bt_main.h"
 #include "esp_gatt_common_api.h"
-#include <string.h>
 #include "bluetooth.h"
 #include "queue.h"
 
@@ -828,5 +828,14 @@ void sendByBt(const char* data, uint32_t len) {
 }
 
 void receiveByBt(BtReceviveFn callback) {
-    
+
+}
+
+void BT_LOG(const char* fmt, ...) {
+    char buff[512]={0};
+    va_list ap;
+    va_start(ap, fmt);
+    uint8_t len = vsprintf(buff, fmt, ap);
+    va_end(ap);
+    sendByBt(buff, len);
 }
