@@ -10,8 +10,8 @@ CFLAGS+= -I$(QUEUE_FILES)
 test: queue.o msp.o  
 	$(CC) $(CFLAGS) -o a.out test.c msp.o queue.o
 
-msp.o: $(MSP_FILES)/msp.c 
-	$(CC) $(CFLAGS) -c $(MSP_FILES)/msp.c -o msp.o
+msp.o: $(MSP_FILES)/msp.c queue.o
+	$(CC) $(CFLAGS) -c $(MSP_FILES)/msp.c -o msp.o queue.o
 
 queue.o: $(QUEUE_FILES)/queue.c
 	$(CC) $(CFLAGS) -c $(QUEUE_FILES)/queue.c -o queue.o

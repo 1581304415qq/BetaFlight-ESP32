@@ -5,12 +5,12 @@
 
 #define UART_BAUD_RATE 115200
 #define UART_PORT_NUM UART_NUM_0
-#define UART_RXD GPIO_NUM_44
 #define UART_TXD GPIO_NUM_43
+#define UART_RXD GPIO_NUM_44
 #define UART_RTS UART_PIN_NO_CHANGE
 #define UART_CTS UART_PIN_NO_CHANGE
 #define BUFFER_SIZE 265
-#define TASK_STACK_SIZE 2048*2
+#define TASK_STACK_SIZE 10240
 
 
 typedef void (*mspRegisterCallback)(uint8_t version, uint16_t command, uint8_t* payload, uint16_t payloadLen);

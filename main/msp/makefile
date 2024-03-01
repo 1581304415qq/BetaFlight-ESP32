@@ -1,14 +1,21 @@
-
 CC = gcc
+SRC_FILES = main 
+MSP_FILES = .
+QUEUE_FILES = ../common
 
-SRC_FILES := app\
+# 包含头文件目录
+CFLAGS+= -I$(MSP_FILES)
+CFLAGS+= -I$(QUEUE_FILES)
 
-test: msp.o
-	CC -o a.out  test.c msp.o
+test: queue.o msp.o  
+	$(CC) $(CFLAGS) -o a.out test.c msp.o queue.o
 
-msp.o: msp.c msp.h
-	CC -c msp.c -o msp.o
+msp.o: $(MSP_FILES)/msp.c queue.o
+	$(CC) $(CFLAGS) -c $(MSP_FILES)/msp.c -o msp.o queue.o
 
-.PHONY: all a.out clean
-clean:
+queue.o: $(QUEUE_FILES)/queue.c
+	$(CC) $(CFLAGS) -c $(QUEUE_FILES)/queue.c -o queue.o
+
+.PHONY: clean
+clean: 
 	rm -f *.o a.out

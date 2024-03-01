@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct {
     uint8_t *array;
@@ -15,4 +16,4 @@ int isFull(Queue* queue);
 int getSize(Queue* queue);
 void enqueue(Queue* queue, uint8_t item);
 uint8_t dequeue(Queue* queue);
-uint8_t popqueue(Queue* queue, uint32_t size);
+bool popqueue(Queue* queue, uint32_t size);

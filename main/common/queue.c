@@ -56,8 +56,10 @@ uint8_t dequeue(Queue* queue) {
     return queue->array[queue->front];
 }
 
-uint8_t popqueue(Queue* queue, uint32_t size) {
+bool popqueue(Queue* queue, uint32_t size) {
     if (getSize(queue) >= size) {
         queue->front = (queue->front + size) % queue->capacity;
+        return true;
     }
+    return false;
 }

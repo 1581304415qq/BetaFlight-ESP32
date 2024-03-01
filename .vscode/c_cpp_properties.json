@@ -4,11 +4,12 @@
             "name": "ESP-IDF",
             "compilerPath": "",
             "includePath": [
-                "${config:idf.espIdfPath}/components/**",
-                "${config:idf.espIdfPathWin}/components/**",
-                "${config:idf.espAdfPath}/components/**",
-                "${config:idf.espAdfPathWin}/components/**",
+                // "${config:idf.espIdfPath}/components/**",
+                // "${config:idf.espIdfPathWin}/components/**",
+                // "${config:idf.espAdfPath}/components/**",
+                // "${config:idf.espAdfPathWin}/components/**",
                 "${workspaceFolder}/**",
+                "${workspaceFolder}/main/common",
                 "~/.espressif/**",
                 "~/esp/esp-idf/**"
             ],

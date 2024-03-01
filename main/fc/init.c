@@ -21,14 +21,14 @@ typedef bool (*RegisterMspEventCallack)(const uint8_t* payload, const uint16_t p
 static RegisterMspEventCallack registerMspEventCallack[0x3FFF] = { 0 };
 
 static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload, uint16_t payloadLen) {
-    BT_LOG("ver=%u, com=%u\n", version, command);
+    // BT_LOG("mspCommonProcess ver=%u, com=%u\n", version, command);
 
     bool handle = true;
     static uint8_t dst[300] = { 0 };
     uint16_t dst_len = 0;
     uint8_t reply_buf[256] = { 0 };
     uint16_t reply_len = 0;
-    msp_message_t msp_message;
+    msp_message_t msp_message={0};
     msp_message.command = command;
     msp_message.header.protocol_version = version;
     msp_message.header.direction_flag = '>';
@@ -471,10 +471,11 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
     }
 
     if (handle) {
-        msp_message.payload = reply_buf;
+        memcpy(msp_message.payload, reply_buf, reply_len);
         msp_message.payload_size = reply_len;
         dst_len = packMessage(&msp_message, dst, sizeof(dst));
         serialWrite(dst, dst_len);
+        // BT_LOG("handle ver=%u, com=%u, dst_len=%d", version, command, dst_len);
     }
     else
         BT_LOG("ver=%u, com=%u", version, command);
@@ -512,7 +513,7 @@ bool get_osd_warnings_event(const uint8_t* payload, const uint16_t payload_len, 
     return false;
 }
 bool get_text_event(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len) {
-    return false;
+    return true;
 }
 
 void initMspEvent() {
@@ -524,8 +525,8 @@ void initMspEvent() {
     // registerMspEvent(MSP2_SEND_DSHOT_COMMAND, send_dshot_command_event);
     // registerMspEvent(MSP2_GET_VTX_DEVICE_STATUS, get_vtx_device_status_event);
     // registerMspEvent(MSP2_GET_OSD_WARNINGS, get_osd_warnings_event);
-    // registerMspEvent(MSP2_GET_TEXT, get_text_event);
-    
+    registerMspEvent(MSP2_GET_TEXT, get_text_event);
+
 }
 
 void init(void) {

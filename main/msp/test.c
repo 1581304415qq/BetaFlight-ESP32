@@ -29,9 +29,8 @@ int test_v2() {
     }
 
     uint8_t reply[256] = { 0 };
-    memset(reply, 0, sizeof(reply)); // 初始化清零
     msp_message.payload_size = payload_len;
-    msp_message.payload = payload;
+    memcpy(msp_message.payload , payload, payload_len);
     msp_message.command = command;
     ret = packMessage(&msp_message, reply, 255);
     printf("pack ret=%d\n", ret);
@@ -41,6 +40,7 @@ int test_v2() {
     }
     
 }
+
 int test_v1() {
     // 示例 MSP 数据包
     uint8_t msp_packet_v1[] = { 0x24, 0x4D, 0x3C, 0x00, 0x01, 0x01};
@@ -66,6 +66,16 @@ int test_v1() {
         printf("解析 MSP 数据包失败\n");
     }
 
+    uint8_t reply[256] = { 0 };
+    msp_message.payload_size = payload_len;
+    memcpy(msp_message.payload , payload, payload_len);
+    msp_message.command = command;
+    ret = packMessage(&msp_message, reply, 255);
+    printf("pack ret=%d\n", ret);
+    for (int i = 0; i < ret; i++)
+    {
+        printf("%02X ", reply[i]);
+    }
 }
 
 int main() {
@@ -74,38 +84,4 @@ int main() {
     test_v2();
 
     return 0;
-    
-    static uint8_t dst[300] = { 0 };
-    uint16_t dst_len = 0;
-    msp_message_t msp_message;
-    msp_message.header.protocol_version = 0;
-    msp_message.header.direction_flag = '>';
-    msp_message.command = 1;
-    // char data[]={ 0x01, 0x02, 0x03 };
-    // msp_message.payload = data;
-    msp_message.payload = (uint8_t[]){ 0x00, 0x01, 46 };
-    msp_message.payload_size = 3;
-    for (size_t i = 0; i < msp_message.payload_size; i++)
-    {
-        printf("%02x ", msp_message.payload[i]);
-    }
-    printf("\n");
-    dst_len = packMessage(&msp_message, dst, sizeof(dst));
-    printf("dst_len=%d\n", dst_len);
-    for (uint8_t i = 0; i < dst_len; i++)
-    {
-        printf("%02x ", dst[i]);
-    }
-    char ff[80]={0};
-    // int rt = sprintf(ff, "%s%d", "ss", 5);
-    int rt = snprintf(ff, 80, "%u%u%u", (uint8_t)5, (uint8_t)5, (uint8_t)0);
-    printf("\n%d %x\n", rt, ff[0]);
-
-    uint32_t payload_len = 0;
-    uint8_t payload[100]={0};
-#define CONFIG_MSP_NAME "YAMATO-FLIGHT"
-        payload_len = strlen(CONFIG_MSP_NAME);
-        memcpy(payload, (char *)CONFIG_MSP_NAME, payload_len);
-        printf("%s %d\n", payload, payload_len);
-        return 0;
 }
