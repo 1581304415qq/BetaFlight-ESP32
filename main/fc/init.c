@@ -13,6 +13,8 @@
 #include "init.h"
 #include "util.h"
 #include "led.h"
+#include "voltage.h"
+#include "pid.h"
 
 #define FC_VARIANT "BTFL"
 
@@ -28,7 +30,7 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
     uint16_t dst_len = 0;
     uint8_t reply_buf[256] = { 0 };
     uint16_t reply_len = 0;
-    msp_message_t msp_message={0};
+    msp_message_t msp_message = { 0 };
     msp_message.command = command;
     msp_message.header.protocol_version = version;
     msp_message.header.direction_flag = '>';
@@ -171,8 +173,68 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
         // todo 保存电压传感器数据
         break;
 
+    case MSP_PID_CONTROLLER:
+#define PID_CONTROLLER_BETAFLIGHT 1
+        reply_buf[0] = PID_CONTROLLER_BETAFLIGHT;
+        reply_len = 1;
+        break;
+
+    case MSP_PID:
+#define  PID_ITEM_COUNT 5
+        pidf_t pid[PID_ITEM_COUNT] = { 0 };
+        for (int i = 0; i < PID_ITEM_COUNT; i++) {
+
+        }
+        reply_len = sizeof(pidf_t) * PID_ITEM_COUNT;
+        memcpy(reply_buf, pid, reply_len);
+        break;
+
+    case MSP_RC_TUNING:
+        msp_rc_tuning_t msp_rc_tuning = { 0 };
+
+        reply_len = sizeof(msp_rc_tuning_t);
+        memcpy(reply_buf, &msp_rc_tuning, reply_len);
+        break;
+
+    case MSP_PIDNAMES:
+        reply_len = sizeof(pidNames);
+        memcpy(reply_buf, pidNames, reply_len);
+        break;
+
+    case MSP_FILTER_CONFIG:
+        msp_filter_config_t msp_filter_config = { 0 };
+        reply_len = sizeof(msp_filter_config_t);
+        memcpy(reply_buf, &msp_filter_config, reply_len);
+        break;
+
+    case MSP_RC_DEADBAND:
+        msp_rc_deadband_t msp_rc_deadband = { 0 };
+        reply_len = sizeof(msp_rc_deadband_t);
+        memcpy(reply_buf, &msp_rc_deadband, reply_len);
+        break;
+    case MSP_MOTOR_CONFIG:
+        msp_motor_config_t msp_motor_config = { 0 };
+        reply_len = sizeof(msp_motor_config_t);
+        memcpy(reply_buf, &msp_motor_config, reply_len);
+        break;
     case MSP_SET_ARMING_DISABLED:
         // todo 禁飞处理
+        break;
+
+    case MSP_ADVANCED_CONFIG:
+        msp_advanced_config_t msp_advanced_config={0};
+
+        reply_len = sizeof(msp_advanced_config_t);
+        memcpy(reply_buf, &msp_advanced_config, reply_len);
+        break;
+
+    case MSP_SIMPLIFIED_TUNING:
+        break;
+    case MSP_CALCULATE_SIMPLIFIED_PID:
+        break;
+    case MSP_CALCULATE_SIMPLIFIED_DTERM:
+        break;
+    case MSP_VALIDATE_SIMPLIFIED_TUNING:
         break;
 
     case MSP_ACC_TRIM:
@@ -192,7 +254,6 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
         reply_len = sizeof(msp_mixer_config_t);
         memcpy(reply_buf, &msp_mixer_config, reply_len);
         break;
-
 
     case MSP_SONAR_ALTITUDE:
         uint32_t sonarAltitude = 230;
@@ -217,13 +278,16 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
     case MSP_STATUS:
         msp_status_t msp_status = { 0 };
         msp_status.taskDeltaTimeUs = 28;
-        msp_status.i2cErrorCount = 0;
+        msp_status.i2cErrorCount = -1;
+
+        msp_status.sensors.gyro = 1;
         msp_status.sensors.acc = 1;
         msp_status.sensors.baro = 1;
         msp_status.sensors.mag = 1;
+        msp_status.sensors.sonar = 1;
         msp_status.sensors.gps = 1;
-        msp_status.sensors.rangefinder = 1;
-        msp_status.sensors.gyro = 1;
+        msp_status.sensors.gpsmag = 1;
+
         msp_status.flightModeFlags = -1;
         msp_status.currentPidProfileIndex = 2;
         msp_status.averageSystemLoad = 24;
@@ -533,6 +597,7 @@ void init(void) {
     systemInit();
     initLED();
 
+    voltageMeterADCInit();
     // Initialize Ble
     initBluetooth();
 
@@ -541,5 +606,14 @@ void init(void) {
     mspSerialInit();
 
     initMspEvent();
+
+    // voltageMeter_t voltageMeter;
+    // while (1)
+    // {
+    //     voltageMeterADCRefresh();
+    //     voltageMeterADCRead(VOLTAGE_SENSOR_ADC_12V, &voltageMeter);
+    //     BT_LOG("get chan=%d, voltage=%d", VOLTAGE_SENSOR_ADC_12V, voltageMeter.unfiltered);
+    //     vTaskDelay(2000 / portTICK_PERIOD_MS);
+    // }
 
 }

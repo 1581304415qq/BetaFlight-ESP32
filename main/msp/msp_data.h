@@ -23,12 +23,14 @@ typedef struct
     uint16_t i2cErrorCount; // i2c错误计数
 
     struct sensorStatus {   // 传感器状态位
+        uint16_t gyro : 1;
         uint16_t acc : 1;
         uint16_t baro : 1;
         uint16_t mag : 1;
+        uint16_t sonar : 1;
+        // uint16_t rangefinder : 1;
         uint16_t gps : 1;
-        uint16_t rangefinder : 1;
-        uint16_t gyro : 1;
+        uint16_t gpsmag : 1;
     } sensors;
 
     uint32_t flightModeFlags; // 飞行模式位(部分)
@@ -385,3 +387,134 @@ typedef struct {
     uint8_t tpa_rate;
     uint16_t tpa_breakpoint;
 }__attribute__((packed)) msp_pidProfile_t;
+
+typedef struct {
+    uint8_t rcRatesRoll;
+    uint8_t rcExpoRoll;
+    uint8_t rcRates[3];              // Roll, Pitch, Yaw RC rates
+    uint8_t tpa_rate;                // TPA rate (not used in the provided code, commented out)
+    uint8_t thrMid8;                 // Throttle mid value
+    uint8_t thrExpo8;                // Throttle expo value
+    uint16_t tpa_breakpoint;         // TPA breakpoint (not used in the provided code, commented out)
+    uint8_t rcExpoYaw;
+    uint8_t rcRatesYaw;
+    uint8_t rcExpoPitch;
+    uint8_t rcRatesPitch;
+    // 1.41
+    uint8_t throttle_limit_type;     // Throttle limit type
+    uint8_t throttle_limit_percent;  // Throttle limit percentage
+    // 1.42
+    uint16_t rate_limit[3];          // Roll, Pitch, Yaw rate limits
+    // 1.43
+    uint8_t rates_type;              // Rates type
+}__attribute__((packed)) msp_rc_tuning_t;
+
+typedef struct {
+    uint8_t gyro_lpf1_static_hz;                   // 陀螺仪第一低通滤波器静态截止频率
+    uint16_t dterm_lpf1_static_hz;                 // D项第一低通滤波器静态截止频率
+    uint16_t yaw_lowpass_hz;                       // 偏航低通滤波器频率
+    uint16_t gyro_soft_notch_hz_1;                 // 陀螺仪软陷波器频率1
+    uint16_t gyro_soft_notch_cutoff_1;             // 陀螺仪软陷波器截止频率1
+    uint16_t dterm_notch_hz;                       // D项陷波器频率
+    uint16_t dterm_notch_cutoff;                   // D项陷波器截止频率
+    uint16_t gyro_soft_notch_hz_2;                 // 陀螺仪软陷波器频率2
+    uint16_t gyro_soft_notch_cutoff_2;             // 陀螺仪软陷波器截止频率2
+    uint8_t dterm_lpf1_type;                       // D项第一低通滤波器类型
+    uint8_t gyro_hardware_lpf;                     // 陀螺仪硬件低通滤波器
+    uint8_t deprecated_gyro_32khz_hardware_lpf;    // 不建议使用：陀螺仪32kHz硬件低通滤波器
+    uint16_t gyro_lpf2_static_hz;                  // 陀螺仪第二低通滤波器静态截止频率
+    uint8_t gyro_lpf1_type;                        // 陀螺仪第一低通滤波器类型
+    uint8_t gyro_lpf2_type;                        // 陀螺仪第二低通滤波器类型
+    uint16_t dterm_lpf2_static_hz;                 // D项第二低通滤波器静态截止频率
+    uint8_t dterm_lpf2_type;                       // D项第二低通滤波器类型
+#if defined(USE_DYN_LPF)
+    uint16_t gyro_lpf1_dyn_min_hz;                 // 陀螺仪第一低通滤波器动态最小频率
+    uint16_t gyro_lpf1_dyn_max_hz;                 // 陀螺仪第一低通滤波器动态最大频率
+    uint16_t dterm_lpf1_dyn_min_hz;                // D项第一低通滤波器动态最小频率
+    uint16_t dterm_lpf1_dyn_max_hz;                // D项第一低通滤波器动态最大频率
+#else
+    uint16_t unused1;
+    uint16_t unused2;
+    uint16_t unused3;
+    uint16_t unused4;
+#endif
+#if defined(USE_DYN_NOTCH_FILTER)
+    uint8_t deprecated_dyn_notch_range;            // 不建议使用：动态陷波器范围
+    uint8_t deprecated_dyn_notch_width_percent;    // 不建议使用：动态陷波器宽度百分比
+    uint16_t dyn_notch_q;                          // 动态陷波器Q值
+    uint16_t dyn_notch_min_hz;                     // 动态陷波器最小频率
+#else
+    uint8_t unused5;
+    uint8_t unused6;
+    uint16_t unused7;
+    uint16_t unused8;
+#endif
+#if defined(USE_RPM_FILTER)
+    uint8_t rpm_filter_harmonics;                  // RPM滤波器谐波
+    uint8_t rpm_filter_min_hz;                     // RPM滤波器最小频率
+#else
+    uint8_t unused9;
+    uint8_t unused10;
+#endif
+#if defined(USE_DYN_NOTCH_FILTER)
+    uint16_t dyn_notch_max_hz;                     // 动态陷波器最大频率
+#else
+    uint16_t unused11;
+#endif
+#if defined(USE_DYN_LPF)
+    uint8_t dterm_lpf1_dyn_expo;                   // D项第一低通滤波器动态指数
+#else
+    uint8_t unused12;
+#endif
+#if defined(USE_DYN_NOTCH_FILTER)
+    uint8_t dyn_notch_count;                       // 动态陷波器数量
+#else
+    uint8_t unused13;
+#endif
+}__attribute__((packed))  msp_filter_config_t;
+
+typedef struct {
+    uint8_t deadband;
+    uint8_t yaw_deadband;
+    uint8_t alt_hold_deadband;
+    uint16_t deadband3d_throttle;
+}__attribute__((packed))  msp_rc_deadband_t;
+
+typedef struct {
+    uint16_t minthrottle;              // 电机最小油门值
+    uint16_t maxthrottle;              // 电机最大油门值
+    uint16_t mincommand;               // 最小命令值
+
+    // API 1.42
+    uint8_t motorCount;                // 电机数量
+    uint8_t motorPoleCount;            // 电机极数
+#ifdef USE_DSHOT_TELEMETRY
+    uint8_t useDshotTelemetry;         // 使用 DShot 电调遥测
+#else
+    uint8_t unused1;
+#endif
+
+#ifdef USE_ESC_SENSOR
+    uint8_t escSensorAvailable;        // 电调传感器可用
+#else
+    uint8_t unused2;
+#endif
+}__attribute__((packed)) msp_motor_config_t;
+
+// 结构体表示了MSP_ADVANCED_CONFIG命令的参数，包含了各种高级配置的设置
+typedef struct {
+    uint8_t pid_process_denom;                      // PID处理分母
+    uint8_t useUnsyncedPwm;                         // 是否使用非同步PWM
+    uint8_t motorPwmProtocol;                       // 电机PWM协议
+    uint16_t motorPwmRate;                          // 电机PWM更新频率
+    uint16_t digitalIdleOffsetValue;                // 数字空闲偏移值
+    uint8_t motorPwmInversion;                      // 电机PWM反转
+    uint8_t gyro_to_use;                            // 使用的陀螺仪
+    uint8_t gyro_high_fsr;                          // 陀螺仪高FSR
+    uint8_t gyroMovementCalibrationThreshold;       // 陀螺仪运动校准阈值
+    uint16_t gyroCalibrationDuration;               // 陀螺仪校准持续时间
+    uint16_t gyro_offset_yaw;                       // 陀螺仪偏航角度偏移
+    uint8_t checkOverflow;                          // 检查溢出
+    uint8_t debug_mode;                             // 调试模式
+    uint8_t DEBUG_COUNT;                            // 调试计数
+}__attribute__((packed)) msp_advanced_config_t;
