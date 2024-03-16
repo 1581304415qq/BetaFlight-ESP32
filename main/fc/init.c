@@ -6,17 +6,21 @@
 #include "msp_protocol.h"
 #include "msp_protocol_v2_betaflight.h"
 #include "system.h"
-#include "bluetooth.h"
+#include "ble.h"
 #include "stdbool.h"
 #include "msp_data.h"
 #include "msp.h"
+#include "esp_log.h"
 #include "init.h"
 #include "util.h"
 #include "led.h"
 #include "voltage.h"
 #include "pid.h"
+#include "imu.h"
 
 #define FC_VARIANT "BTFL"
+
+extern double yaw, pitch, roll;
 
 typedef bool (*RegisterMspEventCallack)(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len);
 
@@ -222,7 +226,7 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
         break;
 
     case MSP_ADVANCED_CONFIG:
-        msp_advanced_config_t msp_advanced_config={0};
+        msp_advanced_config_t msp_advanced_config = { 0 };
 
         reply_len = sizeof(msp_advanced_config_t);
         memcpy(reply_buf, &msp_advanced_config, reply_len);
@@ -368,9 +372,9 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
 
     case MSP_ATTITUDE:
         msp_attitude_t msp_attitude;
-        msp_attitude.roll = 230;
-        msp_attitude.pitch = 560;
-        msp_attitude.yaw = 123;
+        msp_attitude.roll = roll;
+        msp_attitude.pitch = pitch;
+        msp_attitude.yaw = yaw;
 
         reply_len = sizeof(msp_attitude_t);
         memcpy(reply_buf, &msp_attitude, reply_len);
@@ -601,19 +605,36 @@ void init(void) {
     // Initialize Ble
     initBluetooth();
 
+    // mpu6050
+    imuInit();
+    
     // Initialize MSP
-    mspInit();
-    mspSerialInit();
+    // mspInit();
+    // mspSerialInit();
 
-    initMspEvent();
+    // initMspEvent();
 
     // voltageMeter_t voltageMeter;
-    // while (1)
-    // {
-    //     voltageMeterADCRefresh();
-    //     voltageMeterADCRead(VOLTAGE_SENSOR_ADC_12V, &voltageMeter);
-    //     BT_LOG("get chan=%d, voltage=%d", VOLTAGE_SENSOR_ADC_12V, voltageMeter.unfiltered);
-    //     vTaskDelay(2000 / portTICK_PERIOD_MS);
-    // }
+
+
+    while (1)
+    {
+        // voltageMeterADCRefresh();
+        // voltageMeterADCRead(VOLTAGE_SENSOR_ADC_12V, &voltageMeter);
+        // BT_LOG("get chan=%d, voltage=%d", VOLTAGE_SENSOR_ADC_12V, voltageMeter.unfiltered);
+
+        // float degrees = 0;
+        // int ret = mpu6050_basic_read_temperature(&degrees);
+        // float g[3] = { 0 }, dps[3] = { 0 };
+        // ret = mpu6050_basic_read(g, dps);
+        // for (int i = 0; ret==0 && i < 3; i++)
+        // {
+        //     printf("g[%d]=%f, dps[%d]=%f\n", i, g[i], i, dps[i]);
+        // }
+        // printf("ret=%d\n", ret);
+
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+    }
 
 }

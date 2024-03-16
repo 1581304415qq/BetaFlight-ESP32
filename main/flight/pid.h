@@ -1,6 +1,7 @@
 #pragma once
 
 #include "inttypes.h"
+#include "stdbool.h"
 
 const char pidNames[] =
 "ROLL;"
@@ -133,3 +134,101 @@ typedef struct pidProfile_s {
     uint8_t ez_landing_threshold;           // Threshold stick position below which motor output is limited
     uint8_t ez_landing_limit;               // Maximum motor output when all sticks centred and throttle zero
 } pidProfile_t;
+
+typedef enum {
+    PID_STABILISATION_OFF = 0,
+    PID_STABILISATION_ON
+} pidStabilisationState_e;
+
+// 重置PID配置文件
+void resetPidProfile(pidProfile_t *profile);
+
+// 重置PID积分项
+void pidResetIterm(void);
+
+// 设置PID稳定状态
+void pidStabilisationState(pidStabilisationState_e pidControllerState);
+
+// 设置PID积分项加速器
+void pidSetItermAccelerator(float newItermAccelerator);
+
+// 检查是否处于崩溃恢复模式
+bool crashRecoveryModeActive(void);
+
+// 初始化姿态控制器
+void pidAcroTrainerInit(void);
+
+// 设置姿态训练器状态
+void pidSetAcroTrainerState(bool newState);
+
+// 更新TPA系数
+void pidUpdateTpaFactor(float throttle);
+
+// 更新抗重力节流阀滤波器
+void pidUpdateAntiGravityThrottleFilter(float throttle);
+
+// 检查是否启用抗重力OSD
+bool pidOsdAntiGravityActive(void);
+
+// 设置抗重力状态
+void pidSetAntiGravityState(bool newState);
+
+// 检查是否启用抗重力
+bool pidAntiGravityEnabled(void);
+
+#ifdef USE_THRUST_LINEARIZATION
+// 应用推力线性化
+float pidApplyThrustLinearization(float motorValue);
+
+// 补偿推力线性化
+float pidCompensateThrustLinearization(float throttle);
+#endif
+
+#ifdef USE_AIRMODE_LPF
+// 更新空气模式低通滤波器
+void pidUpdateAirmodeLpf(float currentOffset);
+
+// 获取空气模式油门偏移
+float pidGetAirmodeThrottleOffset();
+#endif
+
+#ifdef UNIT_TEST
+#include "sensors/acceleration.h"
+extern float axisError[XYZ_AXIS_COUNT];
+
+// 应用积分放松
+void applyItermRelax(const int axis, const float iterm,
+    const float gyroRate, float *itermErrorRate, float *currentPidSetpoint);
+
+// 应用绝对控制
+void applyAbsoluteControl(const int axis, const float gyroRate, float *currentPidSetpoint, float *itermErrorRate);
+
+// 旋转积分和轴误差
+void rotateItermAndAxisError();
+
+// 计算水平级别强度
+float pidLevel(int axis, const pidProfile_t *pidProfile,
+    const rollAndPitchTrims_t *angleTrim, float rawSetpoint, float horizonLevelStrength);
+
+// 计算水平级别强度
+float calcHorizonLevelStrength(void);
+#endif
+
+// 更新动态低通滤波器DTerm
+void dynLpfDTermUpdate(float throttle);
+
+// 设置PID积分项重置
+void pidSetItermReset(bool enabled);
+
+// 获取先前的设定点
+float pidGetPreviousSetpoint(int axis);
+
+// 获取DTerm
+float pidGetDT();
+
+// 获取PID频率
+float pidGetPidFrequency();
+
+// 动态低通滤波器截止频率
+float dynLpfCutoffFreq(float throttle, uint16_t dynLpfMin, uint16_t dynLpfMax, uint8_t expo);
+

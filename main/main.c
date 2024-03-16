@@ -12,7 +12,7 @@ void run(void) {}
 
 void app_main(void)
 {
-    printf("betafliht esp32!\n");
+    printf("betaflight esp32!\n");
 
     init();
     openLED();

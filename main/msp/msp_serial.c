@@ -8,7 +8,7 @@
 #include "soc/soc_caps.h"
 #include "msp_serial.h"
 #include "msp.h"
-#include "bluetooth.h"
+#include "ble.h"
 #include "util.h"
 #include "queue.h"
 

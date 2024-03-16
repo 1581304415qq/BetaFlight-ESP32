@@ -17,7 +17,12 @@
     "esp_bt.h": "c",
     "esp_gap_ble_api.h": "c",
     "esp_gatt_common_api.h": "c",
-    "maths.h": "c"
+    "maths.h": "c",
+    "driver_mpu6050_interface.h": "c",
+    "pid.h": "c",
+    "driver_mpu6050_basic.h": "c",
+    "mahonyahrs.h": "c",
+    "math.h": "c"
   },
   "idf.flashType": "UART"
 }
