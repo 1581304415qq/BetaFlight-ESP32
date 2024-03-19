@@ -10,6 +10,7 @@ set(srcs "msp/msp.c" "msp/msp_serial.c"
         #  "libs/mpu6050/example/driver_mpu6050_basic.c"
         #  "drivers/mpu6050/driver_mpu6050_interface.c"
          "libs/MahonyAHRS/MahonyAHRS.c"
+         "math/quaternion/quaternion.c"
 )
 
 if(CONFIG_FOO_ENABLE_BAR)
@@ -21,4 +22,5 @@ idf_component_register(SRCS "main.c" "${srcs}"
                     "drivers/bluetooth" "utils" "io" "sensors" "flight"
                     # "libs/mpu6050/interface" "libs/mpu6050/src" "libs/mpu6050/example"
                     "libs/MahonyAHRS"
+                    "math/quaternion"
                     )
