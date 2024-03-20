@@ -1,7 +1,72 @@
+#!/usr/local/bin/python3
+
 import matplotlib.pyplot as plt
 import math
 import re
 import numpy as np
+
+
+# 打印矩阵
+def print_matrix(m):
+    for i in range(m.shape[0]):
+        for j in range(m.shape[1]):
+            print(f"{m[i, j]:.2f}", end=" ")
+        print()
+    print()
+
+# 矩阵加法
+def mat_add(a, b):
+    if a.shape != b.shape:
+        return None
+    return a + b
+
+# 矩阵乘法
+def mat_mul(a, b):
+    if a.shape[1] != b.shape[0]:
+        return None
+    return a @ b
+# def mat_mul(a, b):
+#     if len(a[0]) != len(b):
+#         return None
+#     c = [[0 for j in range(len(b[0]))] for i in range(len(a))]
+#     for i in range(len(a)):
+#         for j in range(len(b[0])):
+#             for k in range(len(a[0])):
+#                 c[i][j] += a[i][k] * b[k][j]
+#     return c
+
+# 绕 X 轴旋转矩阵
+def rotate_x(theta):
+    rx = np.array([[1, 0, 0],
+                   [0, math.cos(theta), -math.sin(theta)],
+                   [0, math.sin(theta), math.cos(theta)]])
+    return rx
+
+# 绕 Y 轴旋转矩阵
+def rotate_y(theta):
+    ry = np.array([[math.cos(theta), 0, math.sin(theta)],
+                   [0, 1, 0],
+                   [-math.sin(theta), 0, math.cos(theta)]])
+    return ry
+
+# 绕 Z 轴旋转矩阵
+def rotate_z(theta):
+    rz = np.array([[math.cos(theta), -math.sin(theta), 0],
+                   [math.sin(theta), math.cos(theta), 0],
+                   [0, 0, 1]])
+    return rz
+
+# 3D 向量旋转
+def rotate_vector(x, y, z, theta_x, theta_y, theta_z):
+    rx = rotate_x(theta_x)
+    ry = rotate_y(theta_y)
+    rz = rotate_z(theta_z)
+    r = mat_mul(mat_mul(rz, ry), rx)
+    v = np.array([[x], [y], [z]])
+    res = mat_mul(r, v)
+    return res[0][0], res[1][0], res[2][0]
+
+
 
 # 全局变量
 twoKp = 2.0 * 2.46  # 2 * 比例增益
@@ -180,7 +245,7 @@ pitch = 0.0
 roll  = 0.0
 yaw   = 0.0
 def quaternion2euler():
-    global yaw, rool, pitch, q0, q1, q2, q3
+    global yaw, roll, pitch, q0, q1, q2, q3
     
     # yaw = math.atan2(2 * q1 * q2 - 2 * q0 * q3, 2 * q0 * q0 + 2 * q1 * q1 - 1) * RAD2DEG
     # pitch = - math.asin(2 * q1 * q3 + 2 * q0 * q2) * RAD2DEG
@@ -221,7 +286,7 @@ def quaternion_to_euler(q0, q1, q2, q3):
  
 def generateData():
     result={}
-    with open('./log/foo.txt') as fo:
+    with open('./log/2024-03-20 10:56:16.txt') as fo:
         lines = fo.readlines()
         for line in lines:
             # print(line)
@@ -250,11 +315,12 @@ def generateData():
 
 # 创建图表
 fig, ax = plt.subplots()
-lines={}
-line_data=[]
+line_data = []
+lines     = {}
 def main():
     global sample_freq, q0, q1, q2, q3, lines
 
+    # 串口数据处理生成备用数据
     data = generateData()
     for key in data.keys():
         print(len(data[key]))
@@ -264,32 +330,92 @@ def main():
     # for value in data['imu']:
     #     print(value)
     
-    draw_data=[]
+    draw_data  = []
+    velocity_x = 0
+    velocity_y = 0
+    velocity_z = 0
+    
+    # 遍历校准后的数据
     for index, value in enumerate(data['imu']):
-        sample_freq = float(data['sampleFreq'][index])
-        data_list = list(map(float, value.split(', ')))
-        # print(sample_freq, data_list)
-        draw_data.append(data_list)
+        # 数据切片
+        # if(index<3800):
+        #     continue
         
+        # 分割原始数据. 三轴加速度和三轴角速度
+        data_list = list(map(float, value.split(', ')))
+        # print(data_list)
+        # draw_data.append(data_list)
+        
+        # 提取输出的采样率数值
+        sample_freq = float(data['sampleFreq'][index])
+        # print('sampleFreq',sample_freq)
+        
+        # 姿态算法,计算姿态四元数
         mahony_ahrs_update_imu(data_list[3]/RAD2DEG, data_list[4]/RAD2DEG, data_list[5]/RAD2DEG, data_list[0], data_list[1], data_list[2])
         # print(q0,q1,q2,q3)
         
+        # 四元数转欧拉角
         quaternion2euler()
         # roll, pitch, yaw = quaternion_to_euler(q0,q1,q2,q3)
+        # draw_data.append([yaw, pitch, roll])
         
+        # 提取输出的欧拉角数据
         print(data['angle'][index])
-        print(yaw, pitch,roll)
+        angle = list(map(float, data['angle'][index].split(', ')))
+        # yaw = angle[0]
+        # pitch = angle[1]
+        # roll = angle[2]
+        # draw_data.append(angle)
+        print('angle:',yaw, pitch, roll)
+        
+        # 提取输出计算的运动加速度
+        acce_list = list(map(float, data['motionAcce'][index].split(', ')))
+        # draw_data.append(acce_list)
+        # print(data['motionAcce'][index])
+        # velocity_x += (acce_list[0] * 9.8 / sample_freq)
+        # velocity_y += (acce_list[1] * 9.8 / sample_freq)
+        # velocity_z += ((acce_list[2] - 1) * 9.8 / sample_freq)
+        # print("velocity:",velocity_x,velocity_y,velocity_z)
+
+        # 使用计算后的姿态角,imu加速度转成当前坐标系下
+        acce_x,acce_y,acce_z = rotate_vector( data_list[0], data_list[1], data_list[2],roll/ RAD2DEG,pitch/ RAD2DEG,yaw/ RAD2DEG)
+        print("acce:",acce_x,acce_y,acce_z)
+        # draw_data.append([acce_x,acce_y,acce_z])
+
+        # 用运动加速度计算 X,Y,Z方向的速度
+        velocity_x += (acce_x * 9.8 / sample_freq)
+        velocity_y += (acce_y * 9.8 / sample_freq)
+        velocity_z += ((acce_z - 0.9989182681980652) * 9.8 / sample_freq)
+        # velocity_z += ((acce_z - 0.9250280381578352) * 9.8 / sample_freq)
+        print("velocity:",velocity_x,velocity_y,velocity_z)
+        draw_data.append([velocity_x,velocity_y,velocity_z])
         
     data = np.array(draw_data)
-    data = data[:,2].tolist()
-    # print(data)
-    # ax.plot(range(len(data)), data, lw=1, label=key)
-    # ax.set_ylim(min(data),max(data))  # 根据需要调整y轴范围
-    # print(min(data),max(data))
+    
+    # 计算平均值
+    drawData = data[:,2]
+    drawData_mean = np.mean(drawData)
+    print(f"The average of drawData is: {drawData_mean}")
+    
+    # 可视化数据
+    minVal = -1
+    maxVal = 1
+    for i in range(3):
+        drawData = data[:,i].tolist()
+        ax.plot(range(len(drawData)), drawData, lw=1, label=key)
+        temp= min(drawData)
+        if minVal > temp:
+            minVal = temp 
+        temp= max(drawData)
+        if maxVal < temp:
+            maxVal = temp 
+        
+    ax.set_ylim(minVal,maxVal)  # 根据需要调整y轴范围
+    # print(minVal,maxVal)
 
 main()
 
 ax.set_title('Real-time Data Visualization')
 ax.set_xlabel('Sample')
 ax.set_ylabel('Value')
-# plt.show()
+plt.show()

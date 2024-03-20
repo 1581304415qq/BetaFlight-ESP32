@@ -3,6 +3,7 @@
 
 #define M_PI (3.14159f)
 
+#define  RAD2DEG (double)57.29577951
 
 
 int main2() {
@@ -28,13 +29,13 @@ int main2() {
 }
 
 int main() {
-
-
-
-    double x = 1.0, y = 2.0, z = 1.0;
+    // double x = 1.0, y = 2.0, z = 1.0;
     // rotate_vector(&x, &y, &z, 0, 0, M_PI / 2);
     // 45,60,30
-    rotate_vector(&x, &y, &z, M_PI / 4, M_PI / 3, M_PI / 6);
+    // rotate_vector(&x, &y, &z, M_PI / 4, M_PI / 3, M_PI / 6);
+
+    double x = 1.000, y = 0.002, z = -0.002;
+    rotate_vector(&x, &y, &z, 178.05407/RAD2DEG, -85.19964/RAD2DEG, -178.54644/RAD2DEG);
 
     printf("Rotated vector: (%.2f, %.2f, %.2f)\n", x, y, z);
     return 0;

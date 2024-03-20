@@ -6,7 +6,7 @@ import numpy as np
 from pynput import keyboard
 
 
-delimiter = "imu:"
+delimiter = "motionAcce:"
 
 # 配置串口参数
 ser = serial.Serial(
@@ -37,6 +37,10 @@ if delimiter=="angle:":
 elif delimiter=="sampleFreq:":
     ax.set_ylim(0, 100)  # 根据需要调整y轴范围
     range_stop=1
+    range_stop=3
+elif delimiter=="motionAcce:":
+    ax.set_ylim(-1.5, 1.5)  # 根据需要调整y轴范围
+    range_stop=3
 else:
     ax.set_ylim(-1.5, 1.5)  # 根据需要调整y轴范围
     range_stop=6

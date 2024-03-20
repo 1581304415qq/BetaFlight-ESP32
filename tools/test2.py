@@ -13,7 +13,7 @@ ser = serial.Serial(
 try:
     while True:
         # 读取串口数据
-        data = ser.readline().decode().rstrip()
+        data = ser.readline().decode('utf-8',errors='ignore').rstrip()
         if data:
             print(f"Received data: {data}")
 

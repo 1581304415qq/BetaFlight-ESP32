@@ -7,6 +7,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "Matrix.h"
 
 #define I2C_MASTER_TIMEOUT_MS 1000
 #define I2C_MASTER_NUM 0
@@ -18,7 +19,7 @@
 
 static mpu6050_handle_t mpu6050 = NULL;
 
-#define TASK_STACK_SIZE 1024*5
+#define TASK_STACK_SIZE 1024*10
 #define TAG "BETA FLIGHT IMU"
 
 volatile float twoKp = (2.0 * 2.46f);	// 2 * proportional gain 比例增益
@@ -100,8 +101,8 @@ void calculateMean(uint32_t numsample, struct Calibrate* calibrate) {
     esp_err_t ret;
     double pre_avg[7] = { 0 };    // 存储取样数量的和
     for (uint32_t i = 0; i < numsample;i++) {
-        ret = mpu6050_get_acce(mpu6050, &acce);
-        ret = mpu6050_get_gyro(mpu6050, &gyro);
+        while(mpu6050_get_acce(mpu6050, &acce));
+        while(mpu6050_get_gyro(mpu6050, &gyro));
 
         pre_avg[0] += (acce.acce_x - 1);
         pre_avg[1] += acce.acce_y;
@@ -152,6 +153,7 @@ int imu_calibrate()
     {
         // 读取采用数平均值
         calculateMean(DEFAULT_CALIBRATION_NUMSAMPLES, &calibrate);
+        vTaskDelay(200 / portTICK_PERIOD_MS);
 
         // 检查校准后的误差
         read_imu_calibrate(&acce, &gyro);
@@ -171,19 +173,24 @@ int imu_calibrate()
 
 
 static void calculateVelocity(
-    float acce_x,
-    float acce_y,
-    float acce_z,
-    float pitch,
-    float roll,
-    float yaw
+    double acce_x,
+    double acce_y,
+    double acce_z,
+    double pitch_rad,
+    double roll_rad,
+    double yaw_rad
 ) {
-    double g = 1.0;
-    double g_x = acce_x - g * (cos(yaw) * sin(pitch) * cos(roll) + sin(yaw) * sin(roll));
-    double g_y = acce_y - g * (sin(yaw) * sin(pitch) * cos(roll) - cos(yaw) * sin(roll));
-    double g_z = acce_z - g * cos(pitch) * cos(roll);
+    static float velocity_x, velocity_y, velocity_z;
 
-    ESP_LOGI(TAG, "Velocity x:%.3f, y:%.3f, z:%.3f\n", g_x, g_y, g_z);
+    rotate_vector(&acce_x, &acce_y, &acce_z, roll_rad, pitch_rad, yaw_rad);
+    ESP_LOGI(TAG, "motionAcce:%.3f, %.3f, %.3f\n", acce_x, acce_y, acce_z);
+
+#define g 9.0
+    velocity_x += acce_x * (g / sampleFreq);
+    velocity_y += acce_y * (g / sampleFreq);
+    velocity_z += acce_z * (g / sampleFreq);
+    ESP_LOGI(TAG, "velocity:%.3f, %.3f, %.3f\n", velocity_x, velocity_y, velocity_z);
+
 }
 
 static void imuTask(void* param) {
@@ -193,13 +200,14 @@ static void imuTask(void* param) {
     mpu6050_gyro_value_t gyro;
     mpu6050_temp_value_t temp;
 
-    uint64_t now = 0, dt = 0, last_update = 0;
+    uint64_t now = 0, last_update = 0;
     // struct timeval tv_now;
 
     ret = mpu6050_get_deviceid(mpu6050, &mpu6050_deviceid);
     ESP_LOGI(TAG, "ret=%d, mpu6050_deviceid=0x%x\n", ret, mpu6050_deviceid);
 
-    while(imu_calibrate());
+    while (imu_calibrate());
+
     for (;;)
     {
         ret = mpu6050_get_temp(mpu6050, &temp);
@@ -218,8 +226,7 @@ static void imuTask(void* param) {
 
         if (ESP_OK != ret)continue;
 
-        now = esp_timer_get_time()/1000L;
-        dt = (now - last_update);
+        now = esp_timer_get_time() / 1000L;
         sampleFreq = (float)(1000.0 / (now - last_update));
         last_update = now;
         ESP_LOGI(TAG, "sampleFreq:%.5f\n", sampleFreq);
@@ -230,7 +237,7 @@ static void imuTask(void* param) {
         quaternion2Angle();
         ESP_LOGI(TAG, "angle:%.5f, %.5f, %.5f\n", yaw, pitch, roll);
 
-        // calculateVelocity(acce.acce_x, acce.acce_y, acce.acce_z, pitch / RAD2DEG, roll / RAD2DEG, yaw / RAD2DEG);
+        calculateVelocity(acce.acce_x, acce.acce_y, acce.acce_z, pitch / RAD2DEG, roll / RAD2DEG, yaw / RAD2DEG);
 
         vTaskDelay(200 / portTICK_PERIOD_MS);
     }
