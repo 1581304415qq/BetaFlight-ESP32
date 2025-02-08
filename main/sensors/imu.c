@@ -8,12 +8,19 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "Matrix.h"
+#include "serial.h"
+
+#define I2C_MASTER_FREQ_HZ_MAX            (1250000) // 1.25 MHz
+#define I2C_MASTER_FREQ_HZ_1250K          (1250000) // 1.25 MHz
+#define I2C_MASTER_FREQ_HZ_1000K          (1000000) // 1 MHz  
+#define I2C_MASTER_FREQ_HZ_400K           (400000)  // 400 KHz
+#define I2C_MASTER_FREQ_HZ_100K           (100000)  // 100 KHz
 
 #define I2C_MASTER_TIMEOUT_MS 1000
 #define I2C_MASTER_NUM 0
 #define I2C_MASTER_SDA_IO GPIO_NUM_17
 #define I2C_MASTER_SCL_IO GPIO_NUM_18
-#define I2C_MASTER_FREQ_HZ 400000
+#define I2C_MASTER_FREQ_HZ I2C_MASTER_FREQ_HZ_400K
 #define I2C_MASTER_RX_BUF_DISABLE 0
 #define I2C_MASTER_TX_BUF_DISABLE 0
 
@@ -22,8 +29,8 @@ static mpu6050_handle_t mpu6050 = NULL;
 #define TASK_STACK_SIZE 1024*10
 #define TAG "BETA FLIGHT IMU"
 
-volatile float twoKp = (2.0 * 2.46f);	// 2 * proportional gain 比例增益
-volatile float twoKi = (2.0 * 0.003f);	// 2 * integral gain     积分增益
+volatile float twoKp = (2.0 * 0.246f);	// 2 * proportional gain 比例增益
+volatile float twoKi = (2.0 * 0.00035f);	// 2 * integral gain     积分增益
 volatile float sampleFreq = 200.0f;	    // sample frequency in Hz
 volatile float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f;   // quaternion of sensor frame relative to auxiliary frame
 static double yaw, pitch, roll;
@@ -58,15 +65,17 @@ static void i2c_sensor_mpu6050_init(void)
 
     i2c_bus_init();
     mpu6050 = mpu6050_create(I2C_MASTER_NUM, MPU6050_I2C_ADDRESS);
-    // TEST_ASSERT_NOT_NULL_MESSAGE(mpu6050, "MPU6050 create returned NULL");
 
-    ret = mpu6050_config(mpu6050, ACCE_FS_4G, GYRO_FS_500DPS);
-    // TEST_ASSERT_EQUAL(ESP_OK, ret);
-    printf("mpu6050 config ret=%d\n", ret);
+    mpu6050_sample_rate(mpu6050);
+    while ((ret = mpu6050_config(mpu6050, ACCE_FS_2G, GYRO_FS_250DPS)) != ESP_OK) {
+        printf("mpu6050 config ret=%d\n", ret);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
 
-    ret = mpu6050_wake_up(mpu6050);
-    // TEST_ASSERT_EQUAL(ESP_OK, ret);
-    printf("mpu6050 wake up ret=%d\n", ret);
+    while ((ret = mpu6050_wake_up(mpu6050)) != ESP_OK) {
+        printf("mpu6050 wake up ret=%d\n", ret);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
 }
 
 #define  RAD2DEG (double)57.29577951
@@ -86,8 +95,8 @@ static void quaternion2Angle() {
 // 默认取样个数
 #define DEFAULT_CALIBRATION_NUMSAMPLES 1000
 // 误差抖动 阈值
-#define DEFAULT_CALIBRATION_ACCEL_DEADZONE  0.001*0.001
-#define DEFAULT_CALIBRATION_GYRO_DEADZONE  0.001*0.001
+#define DEFAULT_CALIBRATION_ACCEL_DEADZONE  0.01*0.01
+#define DEFAULT_CALIBRATION_GYRO_DEADZONE  0.01*0.01
 
 struct Calibrate
 {
@@ -98,11 +107,11 @@ struct Calibrate
 void calculateMean(uint32_t numsample, struct Calibrate* calibrate) {
     mpu6050_acce_value_t acce;
     mpu6050_gyro_value_t gyro;
-    esp_err_t ret;
+
     double pre_avg[7] = { 0 };    // 存储取样数量的和
     for (uint32_t i = 0; i < numsample;i++) {
-        while(mpu6050_get_acce(mpu6050, &acce));
-        while(mpu6050_get_gyro(mpu6050, &gyro));
+        while (mpu6050_get_acce(mpu6050, &acce));
+        while (mpu6050_get_gyro(mpu6050, &gyro));
 
         pre_avg[0] += (acce.acce_x - 1);
         pre_avg[1] += acce.acce_y;
@@ -124,17 +133,18 @@ void calculateMean(uint32_t numsample, struct Calibrate* calibrate) {
 
 void read_imu_calibrate(
     mpu6050_acce_value_t* acce,
-    mpu6050_gyro_value_t* gyro
+    mpu6050_gyro_value_t* gyro,
+    mpu6050_temp_value_t* temp
 ) {
-    esp_err_t ret;
     // 检查校准后的误差
-    ret = mpu6050_get_acce(mpu6050, acce);
-    ret = mpu6050_get_gyro(mpu6050, gyro);
+    while (mpu6050_get_acce(mpu6050, acce));
+    while (mpu6050_get_gyro(mpu6050, gyro));
+    while (mpu6050_get_temp(mpu6050, temp));
 
-    ESP_LOGI(TAG, "raw:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n",
-        acce->acce_x, acce->acce_y, acce->acce_z,
-        gyro->gyro_x, gyro->gyro_y, gyro->gyro_z
-    );
+    // ESP_LOGI(TAG, "raw:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n",
+    //     acce->acce_x, acce->acce_y, acce->acce_z,
+    //     gyro->gyro_x, gyro->gyro_y, gyro->gyro_z
+    // );
     acce->acce_x -= calibrate.acce.acce_x;
     acce->acce_y -= calibrate.acce.acce_y;
     acce->acce_z -= calibrate.acce.acce_z;
@@ -148,6 +158,7 @@ int imu_calibrate()
     esp_err_t ret;
     mpu6050_acce_value_t acce;
     mpu6050_gyro_value_t gyro;
+    mpu6050_temp_value_t temp;
 
     for (int i = 0;i < 10;i++)
     {
@@ -156,7 +167,7 @@ int imu_calibrate()
         vTaskDelay(200 / portTICK_PERIOD_MS);
 
         // 检查校准后的误差
-        read_imu_calibrate(&acce, &gyro);
+        read_imu_calibrate(&acce, &gyro, &temp);
 
         if (acce.acce_z * acce.acce_z > DEFAULT_CALIBRATION_ACCEL_DEADZONE
             || acce.acce_y * acce.acce_y > DEFAULT_CALIBRATION_ACCEL_DEADZONE
@@ -166,9 +177,9 @@ int imu_calibrate()
             || gyro.gyro_z * gyro.gyro_z > DEFAULT_CALIBRATION_GYRO_DEADZONE
             )   continue;
 
-        return 1;
+        return 0;
     }
-    return 0;
+    return 1;
 }
 
 
@@ -185,10 +196,10 @@ static void calculateVelocity(
     rotate_vector(&acce_x, &acce_y, &acce_z, roll_rad, pitch_rad, yaw_rad);
     ESP_LOGI(TAG, "motionAcce:%.3f, %.3f, %.3f\n", acce_x, acce_y, acce_z);
 
-#define g 9.0
-    velocity_x += acce_x * (g / sampleFreq);
-    velocity_y += acce_y * (g / sampleFreq);
-    velocity_z += acce_z * (g / sampleFreq);
+#define g 9.8
+    velocity_x += (acce_x * g / sampleFreq);
+    velocity_y += (acce_y * g / sampleFreq);
+    velocity_z += ((acce_z - 1.0) * g / sampleFreq);
     ESP_LOGI(TAG, "velocity:%.3f, %.3f, %.3f\n", velocity_x, velocity_y, velocity_z);
 
 }
@@ -210,36 +221,41 @@ static void imuTask(void* param) {
 
     for (;;)
     {
-        ret = mpu6050_get_temp(mpu6050, &temp);
-        // ret = mpu6050_get_acce(mpu6050, &acce);
-        // ret = mpu6050_get_gyro(mpu6050, &gyro);
+        now = esp_timer_get_time();
+        sampleFreq = (float)(1000000.0 / (now - last_update));
+        last_update = now;
 
-        read_imu_calibrate(&acce, &gyro);
+        read_imu_calibrate(&acce, &gyro, &temp);
 
-        ESP_LOGI(TAG, "imu:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n",
-            acce.acce_x, acce.acce_y, acce.acce_z,
-            gyro.gyro_x, gyro.gyro_y, gyro.gyro_z
-        );
+        // ESP_LOGI(TAG, "imu:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n",
+        //     acce.acce_x, acce.acce_y, acce.acce_z,
+        //     gyro.gyro_x, gyro.gyro_y, gyro.gyro_z,
+        //     temp.temp
+        //     );
         // ESP_LOGI(TAG, "ret=%d, mpu6050 temp=%f\n", ret, temp.temp);
         // ESP_LOGI(TAG, "acce_x:%.2f, acce_y:%.2f, acce_z:%.2f\n", acce.acce_x, acce.acce_y, acce.acce_z);
         // ESP_LOGI(TAG, "gyro_x:%.2f, gyro_y:%.2f, gyro_z:%.2f\n", gyro.gyro_x, gyro.gyro_y, gyro.gyro_z);
 
-        if (ESP_OK != ret)continue;
+        char buffer[256];
+        size_t len = sprintf(buffer, "%s imu:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n", TAG,
+            acce.acce_x, acce.acce_y, acce.acce_z,
+            gyro.gyro_x, gyro.gyro_y, gyro.gyro_z,
+            temp.temp, sampleFreq
+        );
+        serialWrite(buffer, len);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
 
-        now = esp_timer_get_time() / 1000L;
-        sampleFreq = (float)(1000.0 / (now - last_update));
-        last_update = now;
-        ESP_LOGI(TAG, "sampleFreq:%.5f\n", sampleFreq);
-
+        continue;
         // update mahony imu
         MahonyAHRSupdateIMU(gyro.gyro_x / RAD2DEG, gyro.gyro_y / RAD2DEG, gyro.gyro_z / RAD2DEG, acce.acce_x, acce.acce_y, acce.acce_z);
 
         quaternion2Angle();
+        // yaw += (gyro.gyro_z / sampleFreq);
         ESP_LOGI(TAG, "angle:%.5f, %.5f, %.5f\n", yaw, pitch, roll);
 
         calculateVelocity(acce.acce_x, acce.acce_y, acce.acce_z, pitch / RAD2DEG, roll / RAD2DEG, yaw / RAD2DEG);
 
-        vTaskDelay(200 / portTICK_PERIOD_MS);
+        // vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 
 

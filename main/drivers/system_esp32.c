@@ -3,6 +3,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "inttypes.h"
+#include "serial.h"
 
 void systemInit(void) {
     esp_err_t ret;
@@ -16,4 +17,5 @@ void systemInit(void) {
     }
     ESP_ERROR_CHECK(ret);
 
+    serialInit();
 }

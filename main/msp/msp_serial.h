@@ -15,7 +15,7 @@
 
 typedef void (*mspRegisterCallback)(uint8_t version, uint16_t command, uint8_t* payload, uint16_t payloadLen);
 
-void serialWrite(const uint8_t* data, size_t len);
+void mspSerialWrite(const uint8_t* data, size_t len);
 void mspSerialInit(void);
 void mspRegisterFn(mspRegisterCallback callback);
 void mspUnRegisterFn(mspRegisterCallback callback);

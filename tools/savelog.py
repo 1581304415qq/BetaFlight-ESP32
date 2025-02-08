@@ -1,5 +1,11 @@
+#!/usr/bin/python3
 import serial
 import re
+import time
+
+localtime = time.localtime(time.time())
+date=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+print ("本地时间为 :", date)
 
 # 配置串口参数
 ser = serial.Serial(
@@ -13,7 +19,7 @@ ser = serial.Serial(
 
 # 读取串口数据并调用update函数
 try:
-    fo = open("log/foo.txt", "w")
+    fo = open("log/"+date+".txt", "w")
     while True:
         lineRecv = ser.readline().decode('utf-8', errors='ignore')#.rstrip()
 

@@ -542,7 +542,7 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
         memcpy(msp_message.payload, reply_buf, reply_len);
         msp_message.payload_size = reply_len;
         dst_len = packMessage(&msp_message, dst, sizeof(dst));
-        serialWrite(dst, dst_len);
+        mspSerialWrite(dst, dst_len);
         // BT_LOG("handle ver=%u, com=%u, dst_len=%d", version, command, dst_len);
     }
     else

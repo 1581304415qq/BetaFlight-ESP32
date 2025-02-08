@@ -6,7 +6,7 @@ import numpy as np
 from pynput import keyboard
 
 
-delimiter = "motionAcce:"
+delimiter = "imu:"
 
 # 配置串口参数
 ser = serial.Serial(
@@ -41,6 +41,9 @@ elif delimiter=="sampleFreq:":
 elif delimiter=="motionAcce:":
     ax.set_ylim(-1.5, 1.5)  # 根据需要调整y轴范围
     range_stop=3
+elif delimiter=="velocity:":
+    ax.set_ylim(-100, 100)  # 根据需要调整y轴范围
+    range_stop=3
 else:
     ax.set_ylim(-1.5, 1.5)  # 根据需要调整y轴范围
     range_stop=6
@@ -61,7 +64,7 @@ listener = keyboard.Listener(on_press=on_press)
 listener.start()  # 开始监听键盘输入
 
 should_exit = False  # 控制程序退出
-max_length = 50
+max_length = 1250
 # 读取串口数据并调用update函数
 try:
     while not should_exit:
@@ -80,7 +83,7 @@ try:
 
             # 将字符串分割成列表
             raw_data_list = raw_data.split(", ")
-            print(raw_data_list)
+            # print(raw_data_list)
             
             # pattern = r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"
             # numbers = re.findall(pattern, lineRecv)

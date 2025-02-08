@@ -65,7 +65,7 @@ static void openSerial(void* arg)
         }
 
         ESP_LOGI(TAG, "Recv str: %d\n", length);
-        // serialWrite(buffer,length);
+        // mspSerialWrite(buffer,length);
         // sendByBt((const char*)buffer, length);
         // continue;
 
@@ -107,7 +107,7 @@ static void openSerial(void* arg)
     }
 }
 
-void serialWrite(const uint8_t* data, size_t len) {
+void mspSerialWrite(const uint8_t* data, size_t len) {
     uart_write_bytes(UART_PORT_NUM, (char*)data, len);
 }
 
