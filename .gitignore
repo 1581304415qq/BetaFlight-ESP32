@@ -1,6 +1,9 @@
+.gitignore
 build
 docs
 main/libs
 managed_components
 log
 libs
+.devcontainer/
+.vscode/
