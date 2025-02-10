@@ -8,7 +8,9 @@
 #include "soc/soc_caps.h"
 #include "msp_serial.h"
 #include "msp.h"
+#ifndef CONFIG_IDF_TARGET_ESP32S2
 #include "ble.h"
+#endif
 #include "util.h"
 #include "queue.h"
 
@@ -89,7 +91,7 @@ static void openSerial(void* arg)
         while (getSize(queue) > 0)
         {
             int ret = parse_msp_mechine(queue, &msp_message);
-            // BT_LOG("parse msp ret=%d", ret);
+            // ESP_LOGI(TAG,"parse msp ret=%d", ret);
             if (MSP_SUCCESS == ret) {
                 printf("%c %c %c %d %x %d\n",
                     msp_message.header.start_byte,

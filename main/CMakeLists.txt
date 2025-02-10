@@ -1,16 +1,8 @@
 set(srcs "msp/msp.c" "msp/msp_serial.c"
          "fc/init.c"
-         "drivers/system.c" "drivers/system_esp32.c" "drivers/persistent.c"
-         "drivers/bluetooth/ble.c"  
-         "common/queue.c"
+         "drivers/system.c" "drivers/system_esp32.c"
          "utils/util.c"
-         "io/led.c" "io/serial.c"
-         "sensors/voltage.c" "sensors/imu.c"
-        #  "libs/mpu6050/src/driver_mpu6050.c"
-        #  "libs/mpu6050/example/driver_mpu6050_basic.c"
-        #  "drivers/mpu6050/driver_mpu6050_interface.c"
-         "libs/MahonyAHRS/MahonyAHRS.c"
-         "math/quaternion/quaternion.c" "math/matrix/Matrix.c"
+         "sensors/voltage.c"
 )
 
 if(CONFIG_FOO_ENABLE_BAR)
@@ -18,9 +10,8 @@ if(CONFIG_FOO_ENABLE_BAR)
 endif()
 
 idf_component_register(SRCS "main.c" "${srcs}"
-                    INCLUDE_DIRS "" "msp" "fc" "drivers" "common"
-                    "drivers/bluetooth" "utils" "io" "sensors" "flight"
-                    # "libs/mpu6050/interface" "libs/mpu6050/src" "libs/mpu6050/example"
-                    "libs/MahonyAHRS"
-                    "math/quaternion" "math/matrix"
+                    INCLUDE_DIRS "" "msp" "fc" "drivers"
+                    "utils" "sensors" "flight"
+
+                    REQUIRES driver esp_adc storage wifilink sensor common btlink io
                     )

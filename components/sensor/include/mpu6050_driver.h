@@ -174,7 +174,8 @@ esp_err_t mpu6050_sleep(mpu6050_handle_t sensor);
  */
 esp_err_t mpu6050_config(mpu6050_handle_t sensor, const mpu6050_acce_fs_t acce_fs, const mpu6050_gyro_fs_t gyro_fs);
 
-esp_err_t mpu6050_sample_rate(mpu6050_handle_t sensor);
+esp_err_t mpu6050_sample_rate(mpu6050_handle_t sensor, uint16_t rate);
+esp_err_t mpu6050_set_lpf(mpu6050_handle_t sensor, uint16_t lpf);
 
 
 /**

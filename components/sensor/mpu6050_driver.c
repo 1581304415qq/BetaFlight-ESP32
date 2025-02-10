@@ -10,7 +10,7 @@
 #include <sys/time.h>
 #include "esp_system.h"
 #include "driver/i2c.h"
-#include "mpu6050.h"
+#include "mpu6050_driver.h"
 
 #define ALPHA                       0.99f        /*!< Weight of gyroscope */
 #define RAD_TO_DEG                  57.27272727f /*!< Radians to degrees */

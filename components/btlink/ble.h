@@ -12,4 +12,4 @@ typedef void BtReceviveFn(btServiceChannel_e channel, const uint8_t data, uint32
 void initBluetooth();
 void receiveByBt(BtReceviveFn callback);
 void sendByBt(const char* data, uint32_t len);
-void BT_LOG(const char* fmt, ...);
+void BT_LOG(const char* tag, const char* fmt, ...);

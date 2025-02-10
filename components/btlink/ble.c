@@ -831,7 +831,7 @@ void receiveByBt(BtReceviveFn callback) {
 
 }
 
-void BT_LOG(const char* fmt, ...) {
+void BT_LOG(char* tag,const char* fmt, ...) {
     char buff[512]={0};
     va_list ap;
     va_start(ap, fmt);

@@ -4,7 +4,6 @@
 #include "voltage.h"
 #include "inttypes.h"
 #include "esp_log.h"
-#include "ble.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
@@ -87,7 +86,7 @@ void voltageMeterADCRefresh(void) {
             ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, EXAMPLE_ADC1_CHAN[i], voltage[ADC_UNIT_1][i]);
             voltageMeterADCStates[i].voltageUnfiltered = voltage[ADC_UNIT_1][i];
         }
-        BT_LOG("ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, EXAMPLE_ADC1_CHAN[i], voltage[ADC_UNIT_1][i]);
+        ESP_LOGI(TAG,"ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, EXAMPLE_ADC1_CHAN[i], voltage[ADC_UNIT_1][i]);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

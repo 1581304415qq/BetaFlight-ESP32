@@ -1,0 +1,8 @@
+menu "IO Configuration"
+
+    config ESP_LED_PIN
+        int "LED pin"
+        help
+            control led pin.
+
+endmenu

@@ -346,6 +346,9 @@ def generateData():
 
 selectDimensions="Velocity"
 
+# labels=['yaw','pitch','roll']
+labels=['acce_x','acce_y','acce_z']
+# labels=['velocity_x','velocity_y','velocity_z']
 # 创建图表
 fig, ax = plt.subplots()
 line_data = []
@@ -379,8 +382,8 @@ def main():
     # 遍历校准后的数据
     for index, value in enumerate(data['imu']):
         # 数据切片
-        # if(index<100):
-            # continue
+        # if(index<2000):
+        #     continue
         # if(index>2555):
         #     break
         
@@ -423,12 +426,12 @@ def main():
         # velocity_z += ((acce_list[2] - 0.9989182681980652) * 9.8 / sample_freq)
 
         # 使用计算后的姿态角,imu加速度转成当前坐标系下
-        acce_x,acce_y,acce_z = rotate_vector( data_list[0], data_list[1], data_list[2],pitch, roll, yaw)
+        acce_x,acce_y,acce_z = rotate_vector( data_list[0], data_list[1], data_list[2],roll, pitch, yaw)
         # print("acce:",acce_x,acce_y,acce_z)
-        draw_data.append([acce_x,acce_y,acce_z])
+        # draw_data.append([acce_x,acce_y,acce_z])
 
         # 用运动加速度计算 X,Y,Z方向的速度
-        velocity_x += ((acce_x + 0.007706862004893846) * 9.8 / sample_freq)
+        velocity_x += (acce_x * 9.8 / sample_freq)
         velocity_y += (acce_y * 9.8 / sample_freq)
         velocity_z += ((acce_z - 1) * 9.8 / sample_freq)
         
@@ -478,7 +481,7 @@ def main():
         if maxVal < temp:
             maxVal = temp 
     
-    plt.legend(handles=line_artists,labels=range(3) ,loc='best')
+    plt.legend(handles=line_artists,labels=labels ,loc='best')
     ax.set_ylim(minVal,maxVal)  # 根据需要调整y轴范围
     # print(minVal,maxVal)
 

@@ -1,12 +1,9 @@
-#include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include "msp.h"
+#include "sdkconfig.h"
 #include "msp_serial.h"
 #include "msp_protocol.h"
 #include "msp_protocol_v2_betaflight.h"
 #include "system.h"
-#include "ble.h"
 #include "stdbool.h"
 #include "msp_data.h"
 #include "msp.h"
@@ -20,6 +17,8 @@
 
 #define FC_VARIANT "BTFL"
 
+#define TAG "BTFL"
+
 extern double yaw, pitch, roll;
 
 typedef bool (*RegisterMspEventCallack)(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len);
@@ -27,7 +26,7 @@ typedef bool (*RegisterMspEventCallack)(const uint8_t* payload, const uint16_t p
 static RegisterMspEventCallack registerMspEventCallack[0x3FFF] = { 0 };
 
 static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload, uint16_t payloadLen) {
-    // BT_LOG("mspCommonProcess ver=%u, com=%u\n", version, command);
+    ESP_LOGI(TAG,"mspCommonProcess ver=%u, com=%u\n", version, command);
 
     bool handle = true;
     static uint8_t dst[300] = { 0 };
@@ -543,11 +542,11 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
         msp_message.payload_size = reply_len;
         dst_len = packMessage(&msp_message, dst, sizeof(dst));
         mspSerialWrite(dst, dst_len);
-        // BT_LOG("handle ver=%u, com=%u, dst_len=%d", version, command, dst_len);
+        ESP_LOGI(TAG,"handle ver=%u, com=%u, dst_len=%d", version, command, dst_len);
     }
-    else
-        BT_LOG("ver=%u, com=%u", version, command);
-
+    else {
+        ESP_LOGI(TAG, "ver=%u, com=%u", version, command);
+    }
 }
 
 void registerMspEvent(uint16_t eventType, RegisterMspEventCallack callback) {
@@ -599,15 +598,14 @@ void initMspEvent() {
 
 void init(void) {
     systemInit();
-    initLED();
+
+    led_init();
 
     voltageMeterADCInit();
-    // Initialize Ble
-    initBluetooth();
 
     // mpu6050
     imuInit();
-    
+
     // Initialize MSP
     // mspInit();
     // mspSerialInit();
@@ -621,7 +619,7 @@ void init(void) {
     {
         // voltageMeterADCRefresh();
         // voltageMeterADCRead(VOLTAGE_SENSOR_ADC_12V, &voltageMeter);
-        // BT_LOG("get chan=%d, voltage=%d", VOLTAGE_SENSOR_ADC_12V, voltageMeter.unfiltered);
+        // ESP_LOGI(TAG,"get chan=%d, voltage=%d", VOLTAGE_SENSOR_ADC_12V, voltageMeter.unfiltered);
 
         // float degrees = 0;
         // int ret = mpu6050_basic_read_temperature(&degrees);

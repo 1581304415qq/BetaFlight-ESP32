@@ -26,15 +26,16 @@ void sendTask(void* param)
     }
 }
 
-void serialInit()
+int serialInit()
 {
     ringBufHandle = xRingbufferCreate(1024, RINGBUF_TYPE_BYTEBUF);
-
-    xTaskCreate(sendTask, "uart_send_task", TASK_STACK_SIZE, NULL, 8, NULL);
-
+    if (NULL == ringBufHandle)return -1;
+    if (xTaskCreate(sendTask, "uart_send_task", TASK_STACK_SIZE, NULL, 8, NULL) != pdPASS)
+        return -2;
+    return 0;
 }
 
-esp_err_t serialWrite(const char* buffer, uint32_t len)
+int serialWrite(const char* buffer, uint32_t len)
 {
     UBaseType_t res = xRingbufferSend(ringBufHandle, buffer, len, pdMS_TO_TICKS(1000));
     return ESP_OK;

@@ -1,14 +1,14 @@
 #include "imu.h"
-#include "mpu6050.h"
-#include "MahonyAHRS.h"
-#include <stdio.h>
-#include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "Matrix.h"
-#include "serial.h"
+#include "mpu6050_driver.h"
+#include "MahonyAHRS.h"
+
+#include <stdio.h>
+#include <math.h>
 
 #define I2C_MASTER_FREQ_HZ_MAX            (1250000) // 1.25 MHz
 #define I2C_MASTER_FREQ_HZ_1250K          (1250000) // 1.25 MHz
@@ -66,7 +66,7 @@ static void i2c_sensor_mpu6050_init(void)
     i2c_bus_init();
     mpu6050 = mpu6050_create(I2C_MASTER_NUM, MPU6050_I2C_ADDRESS);
 
-    mpu6050_sample_rate(mpu6050);
+    mpu6050_sample_rate(mpu6050, 200);
     while ((ret = mpu6050_config(mpu6050, ACCE_FS_2G, GYRO_FS_250DPS)) != ESP_OK) {
         printf("mpu6050 config ret=%d\n", ret);
         vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -236,26 +236,26 @@ static void imuTask(void* param) {
         // ESP_LOGI(TAG, "acce_x:%.2f, acce_y:%.2f, acce_z:%.2f\n", acce.acce_x, acce.acce_y, acce.acce_z);
         // ESP_LOGI(TAG, "gyro_x:%.2f, gyro_y:%.2f, gyro_z:%.2f\n", gyro.gyro_x, gyro.gyro_y, gyro.gyro_z);
 
-        char buffer[256];
-        size_t len = sprintf(buffer, "%s imu:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n", TAG,
-            acce.acce_x, acce.acce_y, acce.acce_z,
-            gyro.gyro_x, gyro.gyro_y, gyro.gyro_z,
-            temp.temp, sampleFreq
-        );
-        serialWrite(buffer, len);
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        // char buffer[256];
+        // size_t len = sprintf(buffer, "%s imu:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n", TAG,
+        //     acce.acce_x, acce.acce_y, acce.acce_z,
+        //     gyro.gyro_x, gyro.gyro_y, gyro.gyro_z,
+        //     temp.temp, sampleFreq
+        // );
+        // serialWrite(buffer, len);
+        // vTaskDelay(10 / portTICK_PERIOD_MS);
 
-        continue;
+        // continue;
         // update mahony imu
         MahonyAHRSupdateIMU(gyro.gyro_x / RAD2DEG, gyro.gyro_y / RAD2DEG, gyro.gyro_z / RAD2DEG, acce.acce_x, acce.acce_y, acce.acce_z);
 
         quaternion2Angle();
         // yaw += (gyro.gyro_z / sampleFreq);
-        ESP_LOGI(TAG, "angle:%.5f, %.5f, %.5f\n", yaw, pitch, roll);
+        printf("roll:%.5f,pitch:%.5f,yaw:%.5f\n", roll, pitch, yaw);
 
-        calculateVelocity(acce.acce_x, acce.acce_y, acce.acce_z, pitch / RAD2DEG, roll / RAD2DEG, yaw / RAD2DEG);
+        // calculateVelocity(acce.acce_x, acce.acce_y, acce.acce_z, pitch / RAD2DEG, roll / RAD2DEG, yaw / RAD2DEG);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
 
-        // vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 
 

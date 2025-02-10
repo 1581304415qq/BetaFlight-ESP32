@@ -1,0 +1,11 @@
+menu "Betaflight Configuration"
+
+    config BLUETOOTH_ENABLED
+        bool "Enable Bluetooth"
+        default n
+        help
+            Does the chip support bluetooth?
+
+    source "../components/wifilink/Kconfig"
+    source "../components/io/Kconfig"
+endmenu
