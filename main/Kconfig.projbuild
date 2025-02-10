@@ -6,6 +6,6 @@ menu "Betaflight Configuration"
         help
             Does the chip support bluetooth?
 
-    source "../components/wifilink/Kconfig"
-    source "../components/io/Kconfig"
+    rsource "../components/wifilink/Kconfig"
+    rsource "../components/io/Kconfig"
 endmenu
