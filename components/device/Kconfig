@@ -1,0 +1,26 @@
+menu "IO Configuration"
+
+    config ESP_LED_PIN
+        int "LED pin"
+        help
+            control led pin.
+
+    config ESP_MOTOR1_PIN
+        int "MOTOR1 pin"
+        help
+            control motor pin.
+    config ESP_MOTOR2_PIN
+        int "MOTOR2 pin"
+        help
+            control motor pin.
+    config ESP_MOTOR3_PIN
+        int "MOTOR3 pin"
+        help
+            control motor pin.
+
+    config ESP_MOTOR4_PIN
+        int "MOTOR4 pin"
+        help
+            control motor pin.
+
+endmenu

@@ -7,11 +7,16 @@
                 "${config:idf.espIdfPath}/components/**",
 
                 "${workspaceFolder}/components/**",
+                "${workspaceFolder}/components/storage/**",
+                "${workspaceFolder}/components/queue/**",
+                "${workspaceFolder}/components/cache/**",
+                "${workspaceFolder}/components/api/**",
                 "${workspaceFolder}/build/config/*",
                 "${workspaceFolder}/**"
             ],
             "browse": {
                 "path": [
+                    "${config:idf.espIdfPath}/components",
                     "${workspaceFolder}"
                 ],
                 "limitSymbolsToIncludedHeaders": false

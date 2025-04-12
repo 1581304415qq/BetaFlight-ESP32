@@ -13,5 +13,5 @@ idf_component_register(SRCS "main.c" "${srcs}"
                     INCLUDE_DIRS "" "msp" "fc" "drivers"
                     "utils" "sensors" "flight"
 
-                    REQUIRES driver esp_adc storage wifilink sensor common btlink io
+                    REQUIRES driver esp_adc storage wifilink sensor common btlink device
                     )

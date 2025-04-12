@@ -1,20 +1,15 @@
 #pragma once
 #include <stdint.h>
 
-enum LED_ID {
-    LED_SYS,
-    LED_COUNT,
-};
-
 enum LED_Sta {
     OFF,                // 长关
     ON,                 // 长开
-    QUICK_BLINK,        // 短闪
+    QUICK_BLINK,        // 短闪 开100ms 关闭500ms
     SHARP_BLINK,        // 200ms闪烁
     HEIGHT_BLINK,       // 500ms闪烁
-    LOW_BLINK,          // 1s闪烁
-    SLEEP_BLINK,        // 3s闪烁
-    SLEEP_Q_BLINK,
+    LOW_BLINK,          // 1s闪烁 开1000ms 关闭1000ms
+    SLEEP_BLINK,        // 3s闪烁 开3000ms 关闭3000ms
+    SLEEP_Q_BLINK,      // 开100ms 关闭3000ms
 };
 
 typedef struct
@@ -36,4 +31,4 @@ typedef struct
 
 void init_led(led_config* led_conf, int count);
 void deinit_led();
-void led_set_state(enum LED_ID id, enum LED_Sta sta);
+void led_set_state(uint16_t id, enum LED_Sta sta);

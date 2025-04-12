@@ -117,7 +117,7 @@ static void stop_timer(void)
  * @param m 模式 参考GPIO功能复用表
  * @return led_t*
  */
-static led_t* create_led(enum LED_ID id, gpio_num_t pin, gpio_mode_t mode)
+static led_t* create_led(uint16_t id, gpio_num_t pin, gpio_mode_t mode)
 {
     led_t* led = malloc(sizeof(led_t));
     led->id = id;
@@ -252,7 +252,7 @@ void deinit_led()
     isStart = false;
 }
 
-void led_set_state(enum LED_ID id, enum LED_Sta sta)
+void led_set_state(uint16_t id, enum LED_Sta sta)
 {
     if (leds[id] != NULL)
         led_mode(leds[id], sta);

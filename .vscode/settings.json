@@ -76,8 +76,6 @@
     "udp.h": "c",
     "ip.h": "c",
     "esp_wifi_types.h": "c",
-    "msp_serial.h": "c",
-    "matrix.h": "c",
-    "esp_bt.h": "c"
+    "gpio.h": "c"
   }
 }
