@@ -4,11 +4,17 @@
 #include "driver/gpio.h"
 
 enum LED_ID {
+    LED_WIFI,
     LED_SYS,
+    LED_GRN,
     LED_COUNT,
 };
 
-static led_config leds[] = { {CONFIG_ESP_LED_PIN, GPIO_MODE_OUTPUT} };
+static led_config leds[] = {
+    {CONFIG_ESP_WIFI_LED_PIN, GPIO_MODE_OUTPUT},
+    {CONFIG_ESP_RED_LED_PIN, GPIO_MODE_OUTPUT},
+    {CONFIG_ESP_GRN_LED_PIN, GPIO_MODE_OUTPUT}
+};
 
 void led_init()
 {

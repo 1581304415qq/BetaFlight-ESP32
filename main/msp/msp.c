@@ -115,7 +115,8 @@ int parse_msp_packet(const uint8_t* packet, uint8_t packet_len, msp_header_t* he
 int parse_msp_mechine(Queue* queue, msp_message_t* msp_message) {
     if (getSize(queue) < 1) return MSP_LESS;
 
-    uint8_t byte = dequeue(queue), result = 0;
+    uint8_t byte;
+    int ret = dequeue(queue, &byte), result = 0;
     printf("byte=%02x, %c\n", byte, byte);
     switch (msp_message->header.status)
     {
@@ -191,7 +192,8 @@ int parse_msp_mechine(Queue* queue, msp_message_t* msp_message) {
         }
         else if (msp_message->header.protocol_version == MSP_V2_NATIVE) {
             if (getSize(queue) < 1)return MSP_LESS;
-            uint8_t byte2 = dequeue(queue);
+            uint8_t byte2;
+            ret = dequeue(queue, &byte2);
             msp_message->command = byte2 << 8 | byte;
             msp_message->checksum = crc8_dvb_s2(msp_message->checksum, byte);
             msp_message->checksum = crc8_dvb_s2(msp_message->checksum, byte2);
@@ -201,7 +203,8 @@ int parse_msp_mechine(Queue* queue, msp_message_t* msp_message) {
         break;
     case MSP_COMMAND_V2: {
         if (getSize(queue) < 1)return MSP_LESS;
-        uint8_t byte2 = dequeue(queue);
+        uint8_t byte2;
+        ret = dequeue(queue, &byte2);
         msp_message->payload_size = byte2 << 8 | byte;
         msp_message->checksum = crc8_dvb_s2(msp_message->checksum, byte);
         msp_message->checksum = crc8_dvb_s2(msp_message->checksum, byte2);

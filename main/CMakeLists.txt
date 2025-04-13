@@ -1,8 +1,6 @@
 set(srcs "msp/msp.c" "msp/msp_serial.c"
          "fc/init.c"
-         "drivers/system.c" "drivers/system_esp32.c"
          "utils/util.c"
-         "sensors/voltage.c"
 )
 
 if(CONFIG_FOO_ENABLE_BAR)
@@ -10,8 +8,11 @@ if(CONFIG_FOO_ENABLE_BAR)
 endif()
 
 idf_component_register(SRCS "main.c" "${srcs}"
-                    INCLUDE_DIRS "" "msp" "fc" "drivers"
-                    "utils" "sensors" "flight"
+                    "drivers/system.c" "drivers/system_esp32.c"
 
-                    REQUIRES driver esp_adc storage wifilink sensor common btlink device
+                    INCLUDE_DIRS "" "msp" "fc" "utils" "flight" "drivers"
+                    
+                    REQUIRES esp_timer driver storage wifi sensor common btlink device server
                     )
+
+spiffs_create_partition_image(html ../spiffs FLASH_IN_PROJECT)

@@ -7,9 +7,11 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
+#include <string.h>
 #include <sys/time.h>
 #include "esp_system.h"
-#include "driver/i2c.h"
+#include "freertos/FreeRTOS.h"
+#include "driver/i2c_master.h"
 #include "mpu6050_driver.h"
 
 #define ALPHA                       0.99f        /*!< Weight of gyroscope */
@@ -41,9 +43,11 @@ const uint8_t MPU6050_FIFO_OVERFLOW_INT_BIT = (uint8_t)BIT4;
 const uint8_t MPU6050_MOT_DETECT_INT_BIT = (uint8_t)BIT6;
 const uint8_t MPU6050_ALL_INTERRUPTS = (MPU6050_DATA_RDY_INT_BIT | MPU6050_I2C_MASTER_INT_BIT | MPU6050_FIFO_OVERFLOW_INT_BIT | MPU6050_MOT_DETECT_INT_BIT);
 
+#define MPU6050_MAX_WRITE_SIZE 32  // 保证充足的空间
 typedef struct {
-    i2c_port_t bus;
+    i2c_master_dev_handle_t bus;
     gpio_num_t int_pin;
+    uint8_t write_buffer[MPU6050_MAX_WRITE_SIZE];
     uint16_t dev_addr;
     uint32_t counter;
     float dt;  /*!< delay time between two measurements, dt should be small (ms level) */
@@ -59,53 +63,24 @@ static esp_err_t mpu6050_write(mpu6050_handle_t sensor, const uint8_t reg_start_
     mpu6050_dev_t* sens = (mpu6050_dev_t*)sensor;
     esp_err_t  ret;
 
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    ret = i2c_master_start(cmd);
+    sens->write_buffer[0] = reg_start_addr;
+    memcpy(sens->write_buffer + 1, data_buf, data_len);
+    ret = i2c_master_transmit(sens->bus, sens->write_buffer, data_len + 1, pdMS_TO_TICKS(500));
     assert(ESP_OK == ret);
-    ret = i2c_master_write_byte(cmd, sens->dev_addr | I2C_MASTER_WRITE, true);
-    assert(ESP_OK == ret);
-    ret = i2c_master_write_byte(cmd, reg_start_addr, true);
-    assert(ESP_OK == ret);
-    ret = i2c_master_write(cmd, data_buf, data_len, true);
-    assert(ESP_OK == ret);
-    ret = i2c_master_stop(cmd);
-    assert(ESP_OK == ret);
-    ret = i2c_master_cmd_begin(sens->bus, cmd, 1000 / portTICK_PERIOD_MS);
-    i2c_cmd_link_delete(cmd);
-
     return ret;
 }
 
 static esp_err_t mpu6050_read(mpu6050_handle_t sensor, const uint8_t reg_start_addr, uint8_t* const data_buf, const uint8_t data_len)
 {
     mpu6050_dev_t* sens = (mpu6050_dev_t*)sensor;
-    esp_err_t  ret;
-
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    ret = i2c_master_start(cmd);
-    assert(ESP_OK == ret);
-    ret = i2c_master_write_byte(cmd, sens->dev_addr | I2C_MASTER_WRITE, true);
-    assert(ESP_OK == ret);
-    ret = i2c_master_write_byte(cmd, reg_start_addr, true);
-    assert(ESP_OK == ret);
-    ret = i2c_master_start(cmd);
-    assert(ESP_OK == ret);
-    ret = i2c_master_write_byte(cmd, sens->dev_addr | I2C_MASTER_READ, true);
-    assert(ESP_OK == ret);
-    ret = i2c_master_read(cmd, data_buf, data_len, I2C_MASTER_LAST_NACK);
-    assert(ESP_OK == ret);
-    ret = i2c_master_stop(cmd);
-    assert(ESP_OK == ret);
-    ret = i2c_master_cmd_begin(sens->bus, cmd, 1000 / portTICK_PERIOD_MS);
-    i2c_cmd_link_delete(cmd);
-
+    esp_err_t  ret = i2c_master_transmit_receive(sens->bus, &reg_start_addr, 1, data_buf, data_len, pdMS_TO_TICKS(1000));
     return ret;
 }
 
-mpu6050_handle_t mpu6050_create(i2c_port_t port, const uint16_t dev_addr)
+mpu6050_handle_t mpu6050_create(i2c_master_dev_handle_t cmd, const uint16_t dev_addr)
 {
     mpu6050_dev_t* sensor = (mpu6050_dev_t*)calloc(1, sizeof(mpu6050_dev_t));
-    sensor->bus = port;
+    sensor->bus = cmd;
     sensor->dev_addr = dev_addr << 1;
     sensor->counter = 0;
     sensor->dt = 0;
@@ -345,7 +320,7 @@ esp_err_t mpu6050_register_isr(mpu6050_handle_t sensor, const mpu6050_isr_t isr)
         ret = ESP_ERR_INVALID_ARG;
         return ret;
     }
-
+    gpio_install_isr_service(0);
     ret = gpio_isr_handler_add(
         sensor_device->int_pin,
         ((gpio_isr_t) * (isr)),
@@ -429,6 +404,27 @@ inline uint8_t mpu6050_is_i2c_master_interrupt(uint8_t interrupt_status)
 inline uint8_t mpu6050_is_fifo_overflow_interrupt(uint8_t interrupt_status)
 {
     return (uint8_t)(MPU6050_FIFO_OVERFLOW_INT_BIT == (MPU6050_FIFO_OVERFLOW_INT_BIT & interrupt_status));
+}
+
+esp_err_t mpu6050_get_raw_data(mpu6050_handle_t sensor,
+    mpu6050_raw_acce_value_t* const raw_acce_value,
+    mpu6050_raw_gyro_value_t* const raw_gyro_value,
+    mpu6050_temp_value_t* const temp_value
+)
+{
+    uint8_t data_rd[14] = { 0 };
+    esp_err_t ret = mpu6050_read(sensor, MPU6050_ACCEL_XOUT_H, data_rd, sizeof(data_rd));
+
+    raw_acce_value->raw_acce_x = (int16_t)((data_rd[0] << 8) + (data_rd[1]));
+    raw_acce_value->raw_acce_y = (int16_t)((data_rd[2] << 8) + (data_rd[3]));
+    raw_acce_value->raw_acce_z = (int16_t)((data_rd[4] << 8) + (data_rd[5]));
+
+    temp_value->temp = (int16_t)((data_rd[8] << 8) + (data_rd[9]));
+
+    raw_gyro_value->raw_gyro_x = (int16_t)((data_rd[8] << 8) + (data_rd[9]));
+    raw_gyro_value->raw_gyro_y = (int16_t)((data_rd[10] << 8) + (data_rd[11]));
+    raw_gyro_value->raw_gyro_z = (int16_t)((data_rd[12] << 8) + (data_rd[13]));
+    return ret;
 }
 
 esp_err_t mpu6050_get_raw_acce(mpu6050_handle_t sensor, mpu6050_raw_acce_value_t* const raw_acce_value)

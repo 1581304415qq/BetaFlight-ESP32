@@ -1,17 +1,41 @@
 menu "WiFi Configuration"
-
-    config ESP_WIFI_SSID
-        string "WiFi SSID"
-        default "ESP-DRONE"
+ config WIFI_TX_POWER
+        int "Wi-Fi TX Power (dBm)"
+        range 8 20
+        default 20
         help
-            SSID (network name) for the example to connect to.
+            Wi-Fi transmission power in dBm. Range is 8 to 20 dBm.
 
-    config ESP_WIFI_PASSWORD
-        string "WiFi Password"
+  config AP_WIFI_SSID
+        string "Access Point SSID"
+        default "Mini-Pullux"
+        help
+            SSID (network name) for the Access Point.
+
+    config AP_WIFI_PASSWORD
+        string "Access Point Password"
         default "12345678"
         help
-            WiFi password (WPA or WPA2) for the example to use.
+            Password for the Access Point.
 
+    config AP_WIFI_CHANNEL
+        int "Access Point Channel"
+        default 8
+        help
+            Wi-Fi channel for the Access Point.
+
+   config STA_WIFI_SSID
+        string "Station SSID"
+        default ""
+        help
+            SSID (network name) for the Station mode.
+
+    config STA_WIFI_PASSWORD
+        string "Station Password"
+        default ""
+        help
+            Password for the Station mode.
+            
     choice ESP_WIFI_SAE_MODE
         prompt "WPA3 SAE mode selection"
         default ESP_WPA3_SAE_PWE_BOTH

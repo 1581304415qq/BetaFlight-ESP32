@@ -6,7 +6,6 @@
 #include "led.h"
 #include "init.h"
 
-void run(void) {}
 
 void app_main(void)
 {

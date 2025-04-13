@@ -76,6 +76,7 @@
     "udp.h": "c",
     "ip.h": "c",
     "esp_wifi_types.h": "c",
-    "gpio.h": "c"
+    "gpio.h": "c",
+    "mpu6050_driver.h": "c"
   }
 }

@@ -1,0 +1,112 @@
+menu "IMU Configuration"
+
+    config IMU_ENABLE
+        bool "Enable Inertial Measurement Unit (IMU)"
+        default n
+        help
+            Enable support for inertial measurement unit sensors
+            including accelerometer, gyroscope and magnetometer
+
+    if IMU_ENABLE
+
+        menu "I2C Communication"
+            config IMU_I2C_PORT_NUM
+                int "I2C Port Number"
+                range 0 1
+                default 0
+                help
+                    Select I2C controller port number (0 or 1)
+
+            config IMU_I2C_SDA_IO
+                int "SDA GPIO Number"
+                range 0 46
+                default 19
+                help
+                    GPIO number for I2C SDA signal
+
+            config IMU_I2C_SCL_IO
+                int "SCL GPIO Number"
+                range 0 46
+                default 18
+                help
+                    GPIO number for I2C SCL signal
+
+            config IMU_I2C_FREQ_HZ
+                int "I2C Clock Frequency (Hz)"
+                range 100000 1000000
+                default 400000
+                help
+                    I2C bus clock frequency in Hz (standard: 100kHz, fast: 400kHz)
+
+            config IMU_DEVICE_ADDR
+                hex "IMU I2C Address"
+                range 0x08 0x77
+                default 0x68
+                help
+                    7-bit I2C device address (0x68 for MPU6050 default)
+        endmenu
+
+        menu "Interrupt Configuration"
+            config IMU_INT_ENABLE
+                bool "Enable Hardware Interrupt"
+                default y
+                help
+                    Enable hardware interrupt for data ready signal
+
+            if IMU_INT_ENABLE
+                config IMU_INT_IO
+                    int "Interrupt GPIO Number"
+                    range 0 39
+                    default 23
+                    help
+                        GPIO number for data ready interrupt signal
+
+                config IMU_INT_LEVEL
+                    int "Interrupt Trigger Level"
+                    range 0 1
+                    default 1
+                    help
+                        0: Falling edge trigger
+                        1: Rising edge trigger
+            endif
+        endmenu
+
+        config IMU_POLL_RATE
+            int "Polling Rate (Hz)" if !IMU_INT_ENABLE
+            depends on !IMU_INT_ENABLE
+            range 1 1000
+            default 100
+            help
+                Sensor polling frequency in Hz when not using interrupts
+
+        config IMU_DEBUG
+            bool "Enable Debug Output"
+            default n
+            help
+                Enable verbose debug logging for IMU operations
+
+        choice IMU_SENSOR_TYPE
+            prompt "Select IMU Sensor Model"
+            default IMU_MPU6050
+            help
+                Select the specific IMU sensor model
+
+            config IMU_MPU6050
+                bool "MPU6050 (6-Axis)"
+                help
+                    Invensense MPU6050 6-axis IMU (Accel + Gyro)
+
+            config IMU_MPU9250
+                bool "MPU9250 (9-Axis)"
+                help
+                    Invensense MPU9250 9-axis IMU (Accel + Gyro + Mag)
+
+            config IMU_BMI160
+                bool "BMI160 (6-Axis)"
+                help
+                    Bosch BMI160 6-axis IMU
+        endchoice
+
+    endif
+
+endmenu

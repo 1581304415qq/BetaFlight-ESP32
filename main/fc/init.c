@@ -14,6 +14,8 @@
 #include "voltage.h"
 #include "pid.h"
 #include "imu.h"
+#include "http_server.h"
+#include "tcp_server.h"
 
 #define FC_VARIANT "BTFL"
 
@@ -26,7 +28,7 @@ typedef bool (*RegisterMspEventCallack)(const uint8_t* payload, const uint16_t p
 static RegisterMspEventCallack registerMspEventCallack[0x3FFF] = { 0 };
 
 static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload, uint16_t payloadLen) {
-    ESP_LOGI(TAG,"mspCommonProcess ver=%u, com=%u\n", version, command);
+    ESP_LOGI(TAG, "mspCommonProcess ver=%u, com=%u\n", version, command);
 
     bool handle = true;
     static uint8_t dst[300] = { 0 };
@@ -542,7 +544,7 @@ static void mspCommonProcess(uint8_t version, uint16_t command, uint8_t* payload
         msp_message.payload_size = reply_len;
         dst_len = packMessage(&msp_message, dst, sizeof(dst));
         mspSerialWrite(dst, dst_len);
-        ESP_LOGI(TAG,"handle ver=%u, com=%u, dst_len=%d", version, command, dst_len);
+        ESP_LOGI(TAG, "handle ver=%u, com=%u, dst_len=%d", version, command, dst_len);
     }
     else {
         ESP_LOGI(TAG, "ver=%u, com=%u", version, command);
@@ -557,7 +559,6 @@ void registerMspEvent(uint16_t eventType, RegisterMspEventCallack callback) {
 void unregisterMspEvent(uint16_t eventType, RegisterMspEventCallack callback) {
     if (registerMspEventCallack[eventType] == callback) registerMspEventCallack[eventType] = NULL;
 }
-
 
 
 bool betaflight_bind_event(const uint8_t* payload, const uint16_t payload_len, uint8_t* reply, uint16_t* reply_len) {
@@ -601,7 +602,7 @@ void init(void) {
 
     led_init();
 
-    voltageMeterADCInit();
+    // voltageMeterADCInit();
 
     // mpu6050
     imuInit();
@@ -614,9 +615,9 @@ void init(void) {
 
     // voltageMeter_t voltageMeter;
 
-
-    while (1)
-    {
+    http_server_init("/spiffs");
+    // while (1)
+    // {
         // voltageMeterADCRefresh();
         // voltageMeterADCRead(VOLTAGE_SENSOR_ADC_12V, &voltageMeter);
         // ESP_LOGI(TAG,"get chan=%d, voltage=%d", VOLTAGE_SENSOR_ADC_12V, voltageMeter.unfiltered);
@@ -631,8 +632,31 @@ void init(void) {
         // }
         // printf("ret=%d\n", ret);
 
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        // vTaskDelay(2000 / portTICK_PERIOD_MS);
 
+    // }
+
+}
+
+static tcp_client_ctx_t* client = NULL;
+static void imu_data_handler(
+    mpu6050_raw_acce_value_t* mpu6050_raw_acce_value,
+    mpu6050_raw_gyro_value_t* mpu6050_raw_gyro_value,
+    mpu6050_temp_value_t* mpu6050_temp_value
+) {
+    static char data[512];
+    if (client) {
+        snprintf(data, sizeof(data), "Accel: X=%6d, Y=%6d, Z=%6d\n",
+            mpu6050_raw_acce_value->raw_acce_x, mpu6050_raw_acce_value->raw_acce_y, mpu6050_raw_acce_value->raw_acce_z);
+        server_send(client, data, strlen(data));
     }
+}
 
+void run(void) {
+    http_server_start();
+    client = start_server();
+
+    imuStart(imu_data_handler);
+
+    led_launch();
 }

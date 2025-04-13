@@ -1,0 +1,4 @@
+idf_component_register(SRCS "parse_part.c"
+                    INCLUDE_DIRS "."
+                    PRIV_REQUIRES common
+                    )

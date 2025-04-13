@@ -47,7 +47,7 @@ static void motor_pwm_init() {
         .channel = LEDC_CHANNEL,
         .intr_type = LEDC_INTR_DISABLE,
         .timer_sel = LEDC_TIMER,
-        .speed_mode = LEDC_HIGH_SPEED_MODE,  // 快速通道模式
+        .speed_mode = LEDC_SPEED_MODE_MAX,  // 快速通道模式
         .duty = 0,  // 初始占空比为 0
         .hpoint = 0
     };

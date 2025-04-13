@@ -15,8 +15,8 @@
 extern "C" {
 #endif
 
-#include "driver/i2c.h"
 #include "driver/gpio.h"
+#include "driver/i2c_master.h"
 
 #define MPU6050_I2C_ADDRESS         0x68u /*!< I2C address with AD0 pin low */
 #define MPU6050_I2C_ADDRESS_1       0x69u /*!< I2C address with AD0 pin high */
@@ -118,7 +118,7 @@ typedef gpio_isr_t mpu6050_isr_t;
  *     - NULL Fail
  *     - Others Success
  */
-mpu6050_handle_t mpu6050_create(i2c_port_t port, const uint16_t dev_addr);
+mpu6050_handle_t mpu6050_create(i2c_master_dev_handle_t cmd, const uint16_t dev_addr);
 
 /**
  * @brief Delete and release a sensor object
@@ -322,6 +322,12 @@ extern uint8_t mpu6050_is_i2c_master_interrupt(uint8_t interrupt_status);
  *      - Any other positive integer: Interrupt was triggered by a fifo overflow
  */
 extern uint8_t mpu6050_is_fifo_overflow_interrupt(uint8_t interrupt_status);
+
+esp_err_t mpu6050_get_raw_data(mpu6050_handle_t sensor,
+    mpu6050_raw_acce_value_t* const raw_acce_value,
+    mpu6050_raw_gyro_value_t* const raw_gyro_value,
+    mpu6050_temp_value_t* const temp_value
+);
 
 /**
  * @brief Read raw accelerometer measurements

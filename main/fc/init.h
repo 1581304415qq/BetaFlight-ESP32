@@ -4,3 +4,4 @@
 #include <stdbool.h>
 
 void init(void);
+void run(void);
