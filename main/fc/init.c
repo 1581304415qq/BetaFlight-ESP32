@@ -600,7 +600,8 @@ void initMspEvent() {
 void init(void) {
     systemInit();
 
-    led_init();
+
+    // ret = serialInit();
 
     // voltageMeterADCInit();
 
@@ -642,12 +643,15 @@ static tcp_client_ctx_t* client = NULL;
 static void imu_data_handler(
     mpu6050_raw_acce_value_t* mpu6050_raw_acce_value,
     mpu6050_raw_gyro_value_t* mpu6050_raw_gyro_value,
-    mpu6050_temp_value_t* mpu6050_temp_value
+    int16_t mpu6050_temp_value
 ) {
     static char data[512];
     if (client) {
-        snprintf(data, sizeof(data), "Accel: X=%6d, Y=%6d, Z=%6d\n",
-            mpu6050_raw_acce_value->raw_acce_x, mpu6050_raw_acce_value->raw_acce_y, mpu6050_raw_acce_value->raw_acce_z);
+        snprintf(data, sizeof(data), "Accel: X=%6d, Y=%6d, Z=%6d\nGyro: X=%6d, Y=%6d, Z=%6d\nTemp: %6d\n",
+            mpu6050_raw_acce_value->raw_acce_x, mpu6050_raw_acce_value->raw_acce_y, mpu6050_raw_acce_value->raw_acce_z,
+            mpu6050_raw_gyro_value->raw_gyro_x, mpu6050_raw_gyro_value->raw_gyro_y, mpu6050_raw_gyro_value->raw_gyro_z,
+            mpu6050_temp_value
+            );
         server_send(client, data, strlen(data));
     }
 }

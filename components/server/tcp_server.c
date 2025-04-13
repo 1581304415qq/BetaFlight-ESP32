@@ -9,6 +9,7 @@
 #include "storage.h"
 #include "tcp_server.h"
 #include "freertos/ringbuf.h"
+#include "led.h"
 
 
 #define SERVER_PORT_KEY "SERVER_PORT_KEY"
@@ -122,17 +123,14 @@ static void tcp_server_task(void* pvParameters)
 
         client->sock = client_socket;
         client->is_connected = 1;
+        led_server_connected();
         // 处理客户端数据
         while (client->is_connected) {
             int len = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
-            if (len < 0) {
-                ESP_LOGE(TAG, "Failed to receive data");
-                client->is_connected = 0;
-                break;
-            }
-            else if (len == 0) {
+            if (len <= 0) {
                 ESP_LOGI(TAG, "Client disconnected");
                 client->is_connected = 0;
+                led_wifi_connected();
                 break;
             }
             else {

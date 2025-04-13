@@ -46,8 +46,8 @@ static float yaw, pitch, roll;
 typedef void (*imu_data_callback_t)(
     mpu6050_raw_acce_value_t* mpu6050_raw_acce_value,
     mpu6050_raw_gyro_value_t* mpu6050_raw_gyro_value,
-    mpu6050_temp_value_t* mpu6050_temp_value);
-imu_data_callback_t imu_data_callback = NULL;
+    int16_t mpu6050_temp_value);
+static imu_data_callback_t imu_data_callback = NULL;
 
 /**
  * @brief i2c master initialization
@@ -230,7 +230,7 @@ static void imuTask(void* param) {
     esp_err_t ret;
     mpu6050_raw_acce_value_t mpu6050_raw_acce_value;
     mpu6050_raw_gyro_value_t mpu6050_raw_gyro_value;
-    mpu6050_temp_value_t mpu6050_temp_value;
+    int16_t mpu6050_temp_value;
 
 #ifdef CONFIG_IMU_INT_ENABLE
     while (1)
@@ -260,7 +260,7 @@ static void imuTask(void* param) {
                 imu_data_callback(
                     &mpu6050_raw_acce_value,
                     &mpu6050_raw_gyro_value,
-                    &mpu6050_temp_value
+                    mpu6050_temp_value
                 );
         }
     }

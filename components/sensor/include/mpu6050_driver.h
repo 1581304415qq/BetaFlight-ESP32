@@ -326,7 +326,7 @@ extern uint8_t mpu6050_is_fifo_overflow_interrupt(uint8_t interrupt_status);
 esp_err_t mpu6050_get_raw_data(mpu6050_handle_t sensor,
     mpu6050_raw_acce_value_t* const raw_acce_value,
     mpu6050_raw_gyro_value_t* const raw_gyro_value,
-    mpu6050_temp_value_t* const temp_value
+    int16_t* const temp_value
 );
 
 /**

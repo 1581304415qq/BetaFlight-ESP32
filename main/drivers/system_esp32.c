@@ -5,14 +5,17 @@
 #include "sdkconfig.h"
 #include "esp_timer.h"
 #include "tcp_server.h"
+#include "led.h"
 #ifndef CONFIG_IDF_TARGET_ESP32S2 
 #include "ble.h"
 #endif
 
 void systemInit(void) {
     int ret;
-    
+
     ret = esp_timer_init();
+
+    led_init();
 
     storage_init();
 
@@ -22,10 +25,9 @@ void systemInit(void) {
 #endif
 
     pullux_wifi_init();
-    
-    // ret = serialInit();
+    led_wifi_connected();
 }
 
 void systemDeinit(void) {
-    
+
 }

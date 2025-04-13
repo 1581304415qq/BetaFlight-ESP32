@@ -40,3 +40,13 @@ void led_warning()
 {
     led_set_state(LED_SYS, SHARP_BLINK);
 }
+
+void led_wifi_connected()
+{
+    led_set_state(LED_WIFI, SHARP_BLINK);  
+}
+
+void led_server_connected()
+{
+    led_set_state(LED_WIFI, SLEEP_Q_BLINK);  
+}
