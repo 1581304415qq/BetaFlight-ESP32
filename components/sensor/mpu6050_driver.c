@@ -419,7 +419,7 @@ esp_err_t mpu6050_get_raw_data(mpu6050_handle_t sensor,
     raw_acce_value->raw_acce_y = (int16_t)((data_rd[2] << 8) + (data_rd[3]));
     raw_acce_value->raw_acce_z = (int16_t)((data_rd[4] << 8) + (data_rd[5]));
 
-    *temp_value = (int16_t)((data_rd[8] << 8) + (data_rd[9]));
+    *temp_value = (int16_t)((data_rd[6] << 8) + (data_rd[7]));
 
     raw_gyro_value->raw_gyro_x = (int16_t)((data_rd[8] << 8) + (data_rd[9]));
     raw_gyro_value->raw_gyro_y = (int16_t)((data_rd[10] << 8) + (data_rd[11]));

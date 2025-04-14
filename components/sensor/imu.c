@@ -241,9 +241,9 @@ static void imuTask(void* param) {
             pdFALSE,
             portMAX_DELAY);
 
-        // uint8_t out_intr_status = 0;
-        // mpu6050_get_interrupt_status(mpu6050_handle, &out_intr_status);
-        // ESP_LOGI(TAG, "imu read readed %d", out_intr_status);
+        uint8_t out_intr_status = 0;
+        mpu6050_get_interrupt_status(mpu6050, &out_intr_status);
+        ESP_LOGD(TAG, "imu read readed %d", out_intr_status);
 
         if (bits == DATA_READY_BIT) {
             ret = mpu6050_get_raw_data(
@@ -345,9 +345,9 @@ void imuInit(void) {
     mpu6050_int_config_t mpu6050_int_config = {
         .interrupt_pin = CONFIG_IMU_INT_IO,
         .active_level = CONFIG_IMU_INT_LEVEL,
-        .interrupt_clear_behavior = INTERRUPT_CLEAR_ON_ANY_READ,
+        .interrupt_clear_behavior = INTERRUPT_CLEAR_ON_STATUS_READ,//INTERRUPT_CLEAR_ON_ANY_READ,
         .interrupt_latch = INTERRUPT_LATCH_UNTIL_CLEARED,
-        .pin_mode = INTERRUPT_PIN_PUSH_PULL,
+        .pin_mode = INTERRUPT_PIN_OPEN_DRAIN,//INTERRUPT_PIN_PUSH_PULL,
     };
     mpu6050_config_interrupts(mpu6050, &mpu6050_int_config);
     mpu6050_register_isr(mpu6050, imu_isr_handler);

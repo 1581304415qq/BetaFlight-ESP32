@@ -1,4 +1,15 @@
 const net = require('net');
+const fs = require('fs');
+
+const writeStream = fs.createWriteStream('mpu6050_data.txt', 'utf8');
+
+writeStream.on('finish', () => {
+    console.log('写入完成！');
+});
+
+writeStream.on('error', (err) => {
+    console.error('写入出错:', err);
+});
 
 // 定义服务器地址和端口
 const HOST = '192.168.31.5'; // 替换为实际服务器地址
@@ -18,12 +29,15 @@ client.connect(PORT, HOST, () => {
 // 接收服务器响应
 client.on('data', (data) => {
   console.log('Received:\n', data.toString());
+  writeStream.write(data.toString());
+
   // client.end(); // 关闭连接
 });
 
 // 处理连接关闭
 client.on('close', () => {
   console.log('Connection closed');
+  writeStream.end();
 });
 
 // 处理错误
