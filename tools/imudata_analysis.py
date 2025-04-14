@@ -8,6 +8,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, r2_score
 import joblib  # 推荐用于大数据模型
 
+axes = ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']
 
 # ========================
 # 零偏校准核心算法
@@ -29,20 +30,21 @@ def calibrate_bias(raw_data, sensitivity=0.00006103515625):
 
 
 # 2. 建立二次多项式回归模型 y = β₀ + β₁·T + β₂·T²
-def build_calibration_model(temperatures, gyro_readings):
+def build_calibration_model(temperatures, imu_readings):
     """
     为每个陀螺仪轴建立二次多项式校准模型
     
     参数:
     temperatures: 温度数据数组
-    gyro_readings: 角速度读数数组 (x, y, z)
+    imu_readings: imu读数数组 ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']
     
     返回:
     models: 三个轴的校准模型
     """
-    models = []
+    models = {}
     
-    for axis in range(3):
+    # for axis in range(3):
+    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']):
         # 创建二次多项式回归模型管道
         model = Pipeline([
             ('poly', PolynomialFeatures(degree=2)),
@@ -51,10 +53,10 @@ def build_calibration_model(temperatures, gyro_readings):
         
         # 训练模型
         X = temperatures.reshape(-1, 1)
-        y = gyro_readings[axis]
+        y = imu_readings[axis]
         model.fit(X, y)
         
-        models.append(model)
+        models[axis] = model
     
     return models
 
@@ -71,7 +73,7 @@ def display_model_expressions(models, precision=6):
     expressions: 包含模型表达式的字典
     """
     expressions = {}
-    axes = ['X', 'Y', 'Z']
+    axes = ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']
     
     print("\n校准模型数学表达式:")
     print("=" * 50)
@@ -81,7 +83,7 @@ def display_model_expressions(models, precision=6):
             print(f"错误: 没有{axis}轴的模型")
             continue
             
-        model = models[i]
+        model = models[axis]
         
         # 从管道中提取多项式特征和线性回归组件
         if hasattr(model, 'named_steps'):
@@ -188,13 +190,13 @@ def display_model_expressions(models, precision=6):
 
 
 # 3. 校准函数：给定温度和原始陀螺仪读数，应用校准模型
-def calibrate_gyro(temperature, raw_gyro, models):
+def calibrate_gyro(temperature, raw_data, models):
     """
     对给定温度下的原始陀螺仪读数应用校准模型
     
     参数:
     temperature: 当前温度
-    raw_gyro: 原始陀螺仪读数 [x, y, z]
+    raw_data: 原始陀螺仪读数 [x, y, z]
     models: 陀螺仪校准模型
     
     返回:
@@ -203,21 +205,22 @@ def calibrate_gyro(temperature, raw_gyro, models):
     calibrated_gyro = np.zeros(3)
     temp = np.array([[temperature]])
 
-    for axis in range(3):
+    # for axis in range(3):
+    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']):
         # 预测当前温度下的零偏
         bias = models[axis].predict(temp)[0]
         # 校正陀螺仪读数
-        calibrated_gyro[axis] = raw_gyro[axis] - bias
+        calibrated_gyro[i] = raw_data[axis] - bias
     
     return calibrated_gyro
 
-def vectorized_calibrate_gyro(temperatures, raw_gyro_data, models):
+def vectorized_calibrate_gyro(temperatures, raw_data, models):
     """
     向量化版本的陀螺仪校准函数，一次处理整个数据集
     
     参数:
     temperatures: 温度数据数组 (n,)
-    raw_gyro_data: 原始陀螺仪数据 [gyro_x, gyro_y, gyro_z]，每个是长度为n的数组
+    raw_data: 原始陀螺仪数据 ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']，每个是长度为n的数组
     models: 校准模型列表，长度为3，对应x、y、z轴
     
     返回:
@@ -234,35 +237,36 @@ def vectorized_calibrate_gyro(temperatures, raw_gyro_data, models):
     temps_reshaped = temperatures.reshape(-1, 1)
     
     # 对每个轴分别预测偏差并应用校准
-    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z']):
+    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']):
         # 预测当前轴在所有温度下的偏差
-        biases = models[i].predict(temps_reshaped)
+        biases = models[axis].predict(temps_reshaped)
         
         # 从原始数据中减去偏差，得到校准后的数据
-        calibrated_data[axis] = raw_gyro_data[i] - biases
+        calibrated_data[axis] = raw_data[axis] - biases
     
     return calibrated_data
 
 # 4. 模型评估函数
-def evaluate_model(models, temperatures, gyro_readings):
+def evaluate_model(models, temperatures, imu_readings):
     """
     评估校准模型的性能
     
     参数:
     models: 训练好的模型
     temperatures: 测试温度数据
-    gyro_readings: 对应的角速度读数
+    imu_readings: 对应的imu读数
     
     返回:
     metrics: 性能指标字典
     """
     metrics = {'r2': [], 'rmse': []}
-    axes = ['X', 'Y', 'Z']
+    axes = ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']
     
-    for axis in range(3):
+    # for axis in range(3):
+    for i, axis in enumerate(axes):
         model = models[axis]
         X = temperatures.reshape(-1, 1)
-        y_true = gyro_readings[axis]
+        y_true = imu_readings[axis]
         y_pred = model.predict(X)
         
         # 计算R²和RMSE
@@ -272,7 +276,7 @@ def evaluate_model(models, temperatures, gyro_readings):
         metrics['r2'].append(r2)
         metrics['rmse'].append(rmse)
         
-        print(f"轴 {axes[axis]} - R²: {r2:.4f}, RMSE: {rmse:.4f}")
+        print(f"轴 {axes[i]} - R²: {r2:.4f}, RMSE: {rmse:.4f}")
     
     return metrics
 
@@ -403,6 +407,14 @@ def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibra
     axs[0, 2].legend()
     axs[0, 2].grid(True)
     
+    axs[0, 3].plot(time_filtered, calibrated_data['accel_x'], label='X轴')
+    axs[0, 3].plot(time_filtered, calibrated_data['accel_y'], label='Y轴')
+    axs[0, 3].plot(time_filtered, calibrated_data['accel_z'], label='Z轴')
+    axs[0, 3].set_title('校准加速度计数据(线性回归)')
+    axs[0, 3].set_ylabel('加速度 (校准值)')
+    axs[0, 3].legend()
+    axs[0, 3].grid(True)
+    
     # 绘制陀螺仪数据对比
     # 原始数据
     axs[1, 0].plot(time_original, original_data['gyro_x'], label='X轴')
@@ -477,7 +489,7 @@ def main():
     # 设置中文字体
     set_chinese_font()
     
-    file_path = 'mpu6050_data.txt'  # 替换为你的文件路径
+    file_path = 'data/mpu6050_data.txt'  # 替换为你的文件路径
     window_size = 10  # 滤波窗口大小，可以根据需要调整
 
     try:
@@ -490,18 +502,18 @@ def main():
         calibrate_data = calibrate_bias(filtered_data)
                 
         # 建立误差模型
-        # models = build_calibration_model(filtered_data['temp'],[filtered_data['gyro_x'],filtered_data['gyro_y'],filtered_data['gyro_z']])
-        
-        # 评估模型
-        # metrics = evaluate_model(models,filtered_data['temp'],[filtered_data['gyro_x'],filtered_data['gyro_y'],filtered_data['gyro_z']])
-        
-        # display_model_expressions(models)
+        # models = build_calibration_model(filtered_data['temp'],filtered_data)
         
         # 保存三个轴的校准模型到单个文件
         # joblib.dump(models, 'calibration_models.pkl')
         
         # 从单个文件加载全部模型
         models = joblib.load('calibration_models.pkl')
+        
+        display_model_expressions(models)
+        
+        # 评估模型
+        metrics = evaluate_model(models,filtered_data['temp'],filtered_data)
         
         # 使用模型修正数据
         # calibrated_data = {'gyro_x':[],'gyro_y':[],'gyro_z':[]}
@@ -511,7 +523,7 @@ def main():
         #     calibrated_data['gyro_y'].append(calibrated_gyro[1])
         #     calibrated_data['gyro_z'].append(calibrated_gyro[2])
 
-        calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'],[filtered_data['gyro_x'],filtered_data['gyro_y'],filtered_data['gyro_z']],models)
+        calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'],filtered_data,models)
 
         visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibrated_data)
         # visualize_calibrate_data(calibrated_data)
