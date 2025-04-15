@@ -1,7 +1,7 @@
 const net = require('net');
 const fs = require('fs');
 
-const writeStream = fs.createWriteStream('mpu6050_data.txt', 'utf8');
+const writeStream = fs.createWriteStream('data/mpu6050_data.txt', 'utf8');
 
 writeStream.on('finish', () => {
     console.log('写入完成！');

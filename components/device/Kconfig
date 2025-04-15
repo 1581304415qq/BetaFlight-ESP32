@@ -1,14 +1,31 @@
 menu "IO Configuration"
 
-    config ESP_LED_PIN
-        int "LED pin"
+    config ESP_WIFI_LED_PIN
+        int "Wifi led pin"
+        range 0 46
+        default 7
         help
-            control led pin.
+            Control Wifi led pin.
+
+    config ESP_RED_LED_PIN
+        int "RED led pin"
+        range 0 46
+        default 8
+        help
+            Control RED led pin.
+
+    config ESP_GRN_LED_PIN
+        int "GRN led pin"
+        range 0 46
+        default 9
+        help
+            Control GRN led pin.
 
     config ESP_MOTOR1_PIN
         int "MOTOR1 pin"
         help
             control motor pin.
+
     config ESP_MOTOR2_PIN
         int "MOTOR2 pin"
         help

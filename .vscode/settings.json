@@ -77,6 +77,8 @@
     "ip.h": "c",
     "esp_wifi_types.h": "c",
     "gpio.h": "c",
-    "mpu6050_driver.h": "c"
+    "mpu6050_driver.h": "c",
+    "freertos.h": "c",
+    "i2c_master.h": "c"
   }
 }
