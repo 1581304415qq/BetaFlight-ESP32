@@ -9,7 +9,30 @@ from sklearn.metrics import mean_squared_error, r2_score
 import joblib  # 推荐用于大数据模型
 
 axes = ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']
+acce_sensitivity = 16384
+gyro_sensitivity = 131
 
+
+# 温度转换
+def convertTemp(raw_data): 
+    data={}
+    data['temp'] = raw_data['temp'] / 340.00 + 36.53
+    return data
+# 加速度转换
+def convertAccel(raw_data):
+    data = {}
+    data['accel_x'] = raw_data['accel_x'] / acce_sensitivity
+    data['accel_y'] = raw_data['accel_y'] / acce_sensitivity
+    data['accel_z'] = raw_data['accel_z'] / acce_sensitivity
+    return data
+# 角速度转换
+def convertGyro(raw_data): 
+    data = {}
+    data['gyro_x'] = raw_data['gyro_x'] / gyro_sensitivity
+    data['gyro_y'] = raw_data['gyro_y'] / gyro_sensitivity
+    data['gyro_z'] = raw_data['gyro_z'] / gyro_sensitivity
+    return data
+    
 # ========================
 # 零偏校准核心算法
 # ========================
@@ -230,7 +253,10 @@ def vectorized_calibrate_gyro(temperatures, raw_data, models):
     calibrated_data = {
         'gyro_x': np.zeros(n_samples),
         'gyro_y': np.zeros(n_samples),
-        'gyro_z': np.zeros(n_samples)
+        'gyro_z': np.zeros(n_samples),
+        'accel_x': np.zeros(n_samples),
+        'accel_y': np.zeros(n_samples),
+        'accel_z': np.zeros(n_samples),
     }
     
     # 将温度数据重塑为模型所需的形状
@@ -243,7 +269,7 @@ def vectorized_calibrate_gyro(temperatures, raw_data, models):
         
         # 从原始数据中减去偏差，得到校准后的数据
         calibrated_data[axis] = raw_data[axis] - biases
-    
+    calibrated_data['temp'] = raw_data['temp']
     return calibrated_data
 
 # 4. 模型评估函数
@@ -351,23 +377,37 @@ def apply_filters(data, window_size=5):
     
     return filtered_data
 
-def visualize_calibrate_data(calibrate_data):
+def visualize_calibrate_data(data):
     # 创建图形和子图（3行2列的布局）
-    fig, axs = plt.subplots(2, 2, figsize=(15, 12))
-    fig.set_size_inches(14, 8)  # 实时修改为8x6英寸‌:ml-citation{ref="5,6" data="citationList"}
+    fig, axs = plt.subplots(2, 3, figsize=(14, 8))
+    time_original = np.arange(len(data['gyro_x']))
 
-    time_original = np.arange(len(calibrate_data['gyro_x']))
-
-    axs[0, 0].plot(time_original, calibrate_data['gyro_x'], label='X轴')
-    axs[0, 0].plot(time_original, calibrate_data['gyro_y'], label='Y轴')
-    axs[0, 0].plot(time_original, calibrate_data['gyro_z'], label='Z轴')
-    axs[0, 0].set_title('原始角速度计数据')
-    axs[0, 0].set_ylabel('角速度 (校准值)')
+    axs[0, 0].plot(time_original, data['temp'], label='X轴')
+    axs[0, 0].set_title('温度数据')
+    axs[0, 0].set_ylabel('温度')
     axs[0, 0].legend()
     axs[0, 0].grid(True)
+    
+    axs[0, 1].plot(time_original, data['accel_x'], label='X轴')
+    axs[0, 1].plot(time_original, data['accel_y'], label='Y轴')
+    axs[0, 1].plot(time_original, data['accel_z'], label='Z轴')
+    axs[0, 1].set_title('加速度数据')
+    axs[0, 1].set_ylabel('加速度 (g)')
+    axs[0, 1].legend()
+    axs[0, 1].grid(True)
+    
+    axs[0, 2].plot(time_original, data['gyro_x'], label='X轴')
+    axs[0, 2].plot(time_original, data['gyro_y'], label='Y轴')
+    axs[0, 2].plot(time_original, data['gyro_z'], label='Z轴')
+    axs[0, 2].set_title('角速度数据')
+    axs[0, 2].set_ylabel('角速度 (°/s)')
+    axs[0, 2].legend()
+    axs[0, 2].grid(True)
+    
+    
     # 调整布局
     plt.tight_layout()
-    plt.show()
+    # plt.show()
     
 def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibrated_data):
     """可视化原始数据和滤波后的数据对比"""
@@ -482,7 +522,7 @@ def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibra
     
     # 调整布局
     plt.tight_layout()
-    plt.show()
+    # plt.show()
 
 # 主函数
 def main():
@@ -529,7 +569,19 @@ def main():
         calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'],filtered_data,models)
 
         visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibrated_data)
-        # visualize_calibrate_data(calibrated_data)
+        
+        # 温度转换
+        temperatures = convertTemp(calibrated_data)
+        # 加速度转换
+        accel_g = convertAccel(calibrated_data)
+        # 角速度转换
+        gyro_dps = convertGyro(calibrated_data)
+
+        visualize_calibrate_data({**temperatures,**accel_g,**gyro_dps})
+        
+        
+        plt.show()
+
     except Exception as e:
         print(f"处理数据时出错: {e}")
 

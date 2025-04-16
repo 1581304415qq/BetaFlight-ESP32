@@ -92,7 +92,7 @@ static void i2c_sensor_mpu6050_init(void)
         printf("mpu6050 config ret=%d\n", ret);
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
-    mpu6050_sample_rate(mpu6050, 200);
+    mpu6050_sample_rate(mpu6050, 50);
 }
 
 #define  RAD2DEG 57.29577951f
@@ -231,6 +231,10 @@ static void imuTask(void* param) {
     mpu6050_raw_gyro_value_t mpu6050_raw_gyro_value;
     int16_t mpu6050_temp_value;
 
+    uint8_t mpu6050_deviceid = 0;
+    ret = mpu6050_get_deviceid(mpu6050, &mpu6050_deviceid);
+    ESP_LOGI(TAG, "ret=%d, mpu6050_deviceid=0x%x\n", ret, mpu6050_deviceid);
+
 #ifdef CONFIG_IMU_INT_ENABLE
     while (1)
     {
@@ -263,69 +267,38 @@ static void imuTask(void* param) {
                 );
         }
     }
-#endif
 
-
-    uint8_t mpu6050_deviceid = 0;
+#else
     mpu6050_acce_value_t acce;
     mpu6050_gyro_value_t gyro;
     mpu6050_temp_value_t temp;
 
-    uint64_t now = 0, last_update = 0;
-    // struct timeval tv_now;
-
-    ret = mpu6050_get_deviceid(mpu6050, &mpu6050_deviceid);
-    ESP_LOGI(TAG, "ret=%d, mpu6050_deviceid=0x%x\n", ret, mpu6050_deviceid);
-
-
     while (1)
     {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        ret = mpu6050_get_raw_data(
+            mpu6050,
+            &mpu6050_raw_acce_value,
+            &mpu6050_raw_gyro_value,
+            &mpu6050_temp_value
+        );
+        ESP_LOGD(TAG, "ret=%d,"
+            "Accel: X=%6d, Y=%6d, Z=%6d\n", ret,
+            mpu6050_raw_acce_value.raw_acce_x, mpu6050_raw_acce_value.raw_acce_y, mpu6050_raw_acce_value.raw_acce_z
+        );
+        if (imu_data_callback)
+            imu_data_callback(
+                &mpu6050_raw_acce_value,
+                &mpu6050_raw_gyro_value,
+                mpu6050_temp_value
+            );
+        vTaskDelay((1000 / 50) / portTICK_PERIOD_MS);
     }
 
+#endif
 
+// MahonyAHRSupdateIMU(gyro.gyro_x / RAD2DEG, gyro.gyro_y / RAD2DEG, gyro.gyro_z / RAD2DEG, acce.acce_x, acce.acce_y, acce.acce_z);
 
-    while (imu_calibrate());
-
-    for (;;)
-    {
-        now = esp_timer_get_time();
-        sampleFreq = (float)(1000000.0f / (now - last_update));
-        last_update = now;
-
-        read_imu_calibrate(&acce, &gyro, &temp);
-
-        // ESP_LOGI(TAG, "imu:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n",
-        //     acce.acce_x, acce.acce_y, acce.acce_z,
-        //     gyro.gyro_x, gyro.gyro_y, gyro.gyro_z,
-        //     temp.temp
-        //     );
-        // ESP_LOGI(TAG, "ret=%d, mpu6050 temp=%f\n", ret, temp.temp);
-        // ESP_LOGI(TAG, "acce_x:%.2f, acce_y:%.2f, acce_z:%.2f\n", acce.acce_x, acce.acce_y, acce.acce_z);
-        // ESP_LOGI(TAG, "gyro_x:%.2f, gyro_y:%.2f, gyro_z:%.2f\n", gyro.gyro_x, gyro.gyro_y, gyro.gyro_z);
-
-        // char buffer[256];
-        // size_t len = sprintf(buffer, "%s imu:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n", TAG,
-        //     acce.acce_x, acce.acce_y, acce.acce_z,
-        //     gyro.gyro_x, gyro.gyro_y, gyro.gyro_z,
-        //     temp.temp, sampleFreq
-        // );
-        // serialWrite(buffer, len);
-        // vTaskDelay(10 / portTICK_PERIOD_MS);
-
-        // continue;
-        // update mahony imu
-        MahonyAHRSupdateIMU(gyro.gyro_x / RAD2DEG, gyro.gyro_y / RAD2DEG, gyro.gyro_z / RAD2DEG, acce.acce_x, acce.acce_y, acce.acce_z);
-
-        quaternion2Angle();
-        // yaw += (gyro.gyro_z / sampleFreq);
-        printf("roll:%.5f,pitch:%.5f,yaw:%.5f\n", roll, pitch, yaw);
-
-        // calculateVelocity(acce.acce_x, acce.acce_y, acce.acce_z, pitch / RAD2DEG, roll / RAD2DEG, yaw / RAD2DEG);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    }
-
+// quaternion2Angle();
 
 }
 
