@@ -84,16 +84,15 @@ static void i2c_sensor_mpu6050_init(void)
     i2c_bus_init();
     mpu6050 = mpu6050_create(dev_handle, MPU6050_I2C_ADDRESS);
 
-    mpu6050_sample_rate(mpu6050, 200);
-    while ((ret = mpu6050_config(mpu6050, ACCE_FS_2G, GYRO_FS_250DPS)) != ESP_OK) {
-        printf("mpu6050 config ret=%d\n", ret);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
-
     while ((ret = mpu6050_wake_up(mpu6050)) != ESP_OK) {
         printf("mpu6050 wake up ret=%d\n", ret);
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
+    while ((ret = mpu6050_config(mpu6050, ACCE_FS_2G, GYRO_FS_250DPS)) != ESP_OK) {
+        printf("mpu6050 config ret=%d\n", ret);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+    mpu6050_sample_rate(mpu6050, 200);
 }
 
 #define  RAD2DEG 57.29577951f
@@ -334,7 +333,17 @@ static void IRAM_ATTR imu_isr_handler(void* arg)
 {
     mpu6050_handle_t* mpu6050_handle = (mpu6050_handle_t*)arg;
 
-    xEventGroupSetBits(s_imu_event_group, DATA_READY_BIT);
+    // 清除按键按下标志位，防止重复触发
+    xEventGroupClearBitsFromISR(s_imu_event_group, DATA_READY_BIT);
+
+    BaseType_t xHigherPriorityTaskWoken, xResult;
+    xHigherPriorityTaskWoken = pdFALSE;
+
+    xResult = xEventGroupSetBitsFromISR(s_imu_event_group, DATA_READY_BIT, &xHigherPriorityTaskWoken);
+    if (xResult == pdPASS)
+    {
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
 }
 
 static TaskHandle_t xHandle = NULL;
@@ -344,9 +353,9 @@ void imuInit(void) {
 #ifdef CONFIG_IMU_INT_ENABLE
     mpu6050_int_config_t mpu6050_int_config = {
         .interrupt_pin = CONFIG_IMU_INT_IO,
-        .active_level = 0,//CONFIG_IMU_INT_LEVEL,
-        .interrupt_clear_behavior = INTERRUPT_CLEAR_ON_STATUS_READ,//INTERRUPT_CLEAR_ON_ANY_READ,
-        .interrupt_latch = INTERRUPT_LATCH_UNTIL_CLEARED,//INTERRUPT_LATCH_50US
+        .active_level = CONFIG_IMU_INT_LEVEL,
+        .interrupt_clear_behavior = INTERRUPT_CLEAR_ON_STATUS_READ,
+        .interrupt_latch = INTERRUPT_LATCH_UNTIL_CLEARED,
         .pin_mode = INTERRUPT_PIN_OPEN_DRAIN,
     };
     mpu6050_config_interrupts(mpu6050, &mpu6050_int_config);

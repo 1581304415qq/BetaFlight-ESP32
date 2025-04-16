@@ -23,8 +23,8 @@ def calibrate_bias(raw_data, sensitivity=0.00006103515625):
         
         # 应用校准
         calibrated_data[key] = values - bias
-        if key=='accel_z':
-           calibrated_data[key] = calibrated_data[key] + 16384
+        # if key=='accel_z':
+        #    calibrated_data[key] = calibrated_data[key] + 16384
     
     return calibrated_data
 
@@ -486,6 +486,8 @@ def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibra
 
 # 主函数
 def main():
+    build_models = False
+    
     # 设置中文字体
     set_chinese_font()
     
@@ -500,12 +502,13 @@ def main():
         
         # 零偏校准
         calibrate_data = calibrate_bias(filtered_data)
-                
-        # 建立误差模型
-        # models = build_calibration_model(filtered_data['temp'],filtered_data)
         
-        # 保存三个轴的校准模型到单个文件
-        # joblib.dump(models, 'calibration_models.pkl')
+        if build_models:
+            # 建立误差模型
+            models = build_calibration_model(filtered_data['temp'],filtered_data)
+            
+            # 保存三个轴的校准模型到单个文件
+            joblib.dump(models, 'calibration_models.pkl')
         
         # 从单个文件加载全部模型
         models = joblib.load('calibration_models.pkl')

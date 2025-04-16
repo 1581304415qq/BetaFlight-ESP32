@@ -648,8 +648,8 @@ static void imu_data_handler(
 ) {
     static char data[512];
     if (client) {
-        int micros = esp_timer_get_time(); // 返回自启动以来的微秒数
-        snprintf(data, sizeof(data), "Accel: X=%6d, Y=%6d, Z=%6d\nGyro: X=%6d, Y=%6d, Z=%6d\nTemp: %6d, Tamp: %d\n",
+        int64_t micros = esp_timer_get_time(); // 返回自启动以来的微秒数
+        snprintf(data, sizeof(data), "Accel: X=%6d, Y=%6d, Z=%6d\nGyro: X=%6d, Y=%6d, Z=%6d\nTemp: %6d, Tamp: %lld\n",
             mpu6050_raw_acce_value->raw_acce_x, mpu6050_raw_acce_value->raw_acce_y, mpu6050_raw_acce_value->raw_acce_z,
             mpu6050_raw_gyro_value->raw_gyro_x, mpu6050_raw_gyro_value->raw_gyro_y, mpu6050_raw_gyro_value->raw_gyro_z,
             mpu6050_temp_value, micros

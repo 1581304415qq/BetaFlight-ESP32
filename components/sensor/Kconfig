@@ -20,14 +20,14 @@ menu "IMU Configuration"
             config IMU_I2C_SDA_IO
                 int "SDA GPIO Number"
                 range 0 46
-                default 19
+                default 11
                 help
                     GPIO number for I2C SDA signal
 
             config IMU_I2C_SCL_IO
                 int "SCL GPIO Number"
                 range 0 46
-                default 18
+                default 10
                 help
                     GPIO number for I2C SCL signal
 
@@ -57,7 +57,7 @@ menu "IMU Configuration"
                 config IMU_INT_IO
                     int "Interrupt GPIO Number"
                     range 0 39
-                    default 23
+                    default 12
                     help
                         GPIO number for data ready interrupt signal
 
@@ -66,8 +66,8 @@ menu "IMU Configuration"
                     range 0 1
                     default 1
                     help
-                        0: Falling edge trigger
-                        1: Rising edge trigger
+                        0: Rising edge trigger. The mpu6050 sets its INT pin HIGH on interrupt 
+                        1: Falling edge trigger. The mpu6050 sets its INT pin LOW on interrupt
             endif
         endmenu
 

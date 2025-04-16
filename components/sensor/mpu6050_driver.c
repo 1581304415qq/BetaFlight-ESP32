@@ -294,10 +294,10 @@ esp_err_t mpu6050_config_interrupts(mpu6050_handle_t sensor, const mpu6050_int_c
     gpio_int_type_t gpio_intr_type;
 
     if (INTERRUPT_PIN_ACTIVE_LOW == interrupt_configuration->active_level) {
-        gpio_intr_type = GPIO_INTR_NEGEDGE;
+        gpio_intr_type = GPIO_INTR_NEGEDGE; //下降沿
     }
     else {
-        gpio_intr_type = GPIO_INTR_POSEDGE;
+        gpio_intr_type = GPIO_INTR_POSEDGE; //上升沿
     }
 
     gpio_config_t int_gpio_config = {
@@ -305,6 +305,7 @@ esp_err_t mpu6050_config_interrupts(mpu6050_handle_t sensor, const mpu6050_int_c
         .intr_type = gpio_intr_type,
         .pin_bit_mask = (BIT0 << interrupt_configuration->interrupt_pin)
     };
+    if (gpio_intr_type == GPIO_INTR_NEGEDGE) int_gpio_config.pull_up_en = GPIO_PULLUP_ENABLE;
 
     ret = gpio_config(&int_gpio_config);
 
