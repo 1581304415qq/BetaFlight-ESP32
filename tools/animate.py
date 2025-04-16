@@ -1,86 +1,90 @@
-import pygame
-from math import sin, cos, radians
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
 
-# 顶点旋转函数
-def rotate_vertex(vertex, rotation_x, rotation_y):
-    # 绕X轴旋转
-    x = vertex[0]
-    y = vertex[1] * rotation_x[1][1] + vertex[2] * rotation_x[1][2]
-    z = vertex[1] * rotation_x[2][1] + vertex[2] * rotation_x[2][2]
+def euler_to_rotation_matrix(roll, pitch, yaw):
+    """将欧拉角转换为旋转矩阵 (ZYX顺序)"""
+    roll = np.radians(roll)
+    pitch = np.radians(pitch)
+    yaw = np.radians(yaw)
 
-    # 绕Y轴旋转
-    x = x * rotation_y[0][0] + z * rotation_y[0][2]
-    y = y * rotation_y[1][1]
-    z = x * rotation_y[2][0] + z * rotation_y[2][2]
+    Rz = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                   [np.sin(yaw), np.cos(yaw), 0],
+                   [0, 0, 1]])
 
-    return [x, y, z]
+    Ry = np.array([[np.cos(pitch), 0, np.sin(pitch)],
+                   [0, 1, 0],
+                   [-np.sin(pitch), 0, np.cos(pitch)]])
 
+    Rx = np.array([[1, 0, 0],
+                   [0, np.cos(roll), -np.sin(roll)],
+                   [0, np.sin(roll), np.cos(roll)]])
 
-# 初始化Pygame
-pygame.init()
+    return Rz @ Ry @ Rx
 
-# 设置显示窗口
-width, height = 800, 600
-screen = pygame.display.set_mode((width, height))
-pygame.display.set_caption("Rotating Cube")
+class VectorVisualizer:
+    def __init__(self):
+        self.fig = plt.figure(figsize=(10, 8))
+        self.ax = self.fig.add_subplot(111, projection='3d')
 
-# 定义立方体顶点
-vertices = [
-    [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
-    [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]
-]
+        # 初始化坐标系向量
+        self.origin = np.array([0, 0, 0])
+        self.x_axis = np.array([1, 0, 0])
+        self.y_axis = np.array([0, 1, 0])
+        self.z_axis = np.array([0, 0, 1])
 
-# 定义立方体面和对应的颜色
-faces = [
-    ([0, 1, 2, 3], (255, 0, 0)),   # 红色
-    ([1, 5, 6, 2], (0, 255, 0)),   # 绿色
-    ([5, 4, 7, 6], (0, 0, 255)),   # 蓝色
-    ([4, 0, 3, 7], (255, 255, 0)), # 黄色
-    ([0, 4, 5, 1], (255, 0, 255)), # 紫色
-    ([3, 2, 6, 7], (0, 255, 255))  # 青色
-]
+        # 绘制初始坐标系
+        self.quiver_x = self.ax.quiver(*self.origin, *self.x_axis, color='r', label='X', lw=2)
+        self.quiver_y = self.ax.quiver(*self.origin, *self.y_axis, color='g', label='Y', lw=2)
+        self.quiver_z = self.ax.quiver(*self.origin, *self.z_axis, color='b', label='Z', lw=2)
 
-# 设置相机位置和观察方向
-camera_position = [0, 0, -5]
-target = [0, 0, 0]
+        # 设置坐标轴属性
+        self.ax.set_xlim([-1.5, 1.5])
+        self.ax.set_ylim([-1.5, 1.5])
+        self.ax.set_zlim([-1.5, 1.5])
+        self.ax.set_xlabel('X')
+        self.ax.set_ylabel('Y')
+        self.ax.set_zlabel('Z')
+        self.ax.view_init(elev=20, azim=30)  # 设置初始视角
+        self.ax.legend()
+        
 
-# 初始旋转角度
-angle = 0
-
-# 游戏循环
-running = True
-while running:
-    # 处理事件
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-
-    # 清空屏幕
-    screen.fill((0, 0, 0))
-
-    # 绘制立方体
-    angle += 0.2  # 旋转角度增加
-    for face, color in faces:
+    def update(self, angles):
+        """更新坐标系可视化"""
+        roll, pitch, yaw = angles['roll'], angles['pitch'], angles['yaw']
+        
         # 计算旋转矩阵
-        rotation_x = [[1, 0, 0],
-                      [0, cos(radians(angle)), -sin(radians(angle))],
-                      [0, sin(radians(angle)), cos(radians(angle))]]
-        rotation_y = [[cos(radians(angle)), 0, sin(radians(angle))],
-                      [0, 1, 0],
-                      [-sin(radians(angle)), 0, cos(radians(angle))]]
+        R = euler_to_rotation_matrix(roll, pitch, yaw)
+        
+        # 应用旋转
+        new_x = R @ self.x_axis
+        new_y = R @ self.y_axis
+        new_z = R @ self.z_axis
 
-        # 将顶点坐标旋转
-        projected_vertices = [rotate_vertex(vertex, rotation_x, rotation_y) for vertex in [vertices[i] for i in face]]
+        # 更新箭头（修正转置错误）
+        self.quiver_x.set_segments([np.array([self.origin, new_x])])
+        self.quiver_y.set_segments([np.array([self.origin, new_y])])
+        self.quiver_z.set_segments([np.array([self.origin, new_z])])
+        
+        # 重绘图形
+        plt.draw()
 
-        # 绘制多边形
-        pygame.draw.polygon(screen, color, [
-            [width // 2 + (vertex[0] - camera_position[0]) * 100,
-             height // 2 + (vertex[1] - camera_position[1]) * 100]
-            for vertex in projected_vertices
-        ], 0)
+def show_animate(angles):
+    vis = VectorVisualizer()
+    # 创建动画
+    def animate(frame):
+        vis.update({'roll': angles[0][frame], 'pitch': angles[1][frame], 'yaw': angles[2][frame]})
+        return (vis.quiver_x, vis.quiver_y, vis.quiver_z)
 
-    # 更新显示
-    pygame.display.flip()
+    ani = FuncAnimation(vis.fig, 
+                      animate,
+                      frames=range(len(angles[0])),  # 完整旋转360度
+                      interval=20,                   # 20ms帧间隔
+                      blit=False)                    # 3D图形不支持blitting
+    
+    plt.show()
 
-# 退出Pygame
-pygame.quit()
+# if __name__ == "__main__":
+#     angles=[np.arange(0, 360, 1),np.arange(0, 360, 1),np.arange(0, 360, 1)]
+#     show_animate(angles)

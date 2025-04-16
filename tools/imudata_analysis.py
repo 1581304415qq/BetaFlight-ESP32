@@ -7,11 +7,14 @@ from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, r2_score
 import joblib  # 推荐用于大数据模型
+from MahonyAHRS import MahonyAHRS 
+from MahonyAHRS_NoMag import MahonyAHRS_NoMag 
+from animate import show_animate
+import time
 
 axes = ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']
 acce_sensitivity = 16384
 gyro_sensitivity = 131
-
 
 # 温度转换
 def convertTemp(raw_data): 
@@ -46,8 +49,8 @@ def calibrate_bias(raw_data, sensitivity=0.00006103515625):
         
         # 应用校准
         calibrated_data[key] = values - bias
-        # if key=='accel_z':
-        #    calibrated_data[key] = calibrated_data[key] + 16384
+        if key=='accel_z':
+           calibrated_data[key] = calibrated_data[key] + 16384
     
     return calibrated_data
 
@@ -254,22 +257,27 @@ def vectorized_calibrate_gyro(temperatures, raw_data, models):
         'gyro_x': np.zeros(n_samples),
         'gyro_y': np.zeros(n_samples),
         'gyro_z': np.zeros(n_samples),
-        'accel_x': np.zeros(n_samples),
-        'accel_y': np.zeros(n_samples),
-        'accel_z': np.zeros(n_samples),
+        # 'accel_x': np.zeros(n_samples),
+        # 'accel_y': np.zeros(n_samples),
+        # 'accel_z': np.zeros(n_samples),
     }
     
     # 将温度数据重塑为模型所需的形状
     temps_reshaped = temperatures.reshape(-1, 1)
     
     # 对每个轴分别预测偏差并应用校准
-    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']):
+    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z']):#,'accel_x', 'accel_y', 'accel_z']):
         # 预测当前轴在所有温度下的偏差
         biases = models[axis].predict(temps_reshaped)
         
         # 从原始数据中减去偏差，得到校准后的数据
         calibrated_data[axis] = raw_data[axis] - biases
+    
     calibrated_data['temp'] = raw_data['temp']
+    calibrated_data['accel_x'] = raw_data['accel_x']
+    calibrated_data['accel_y'] = raw_data['accel_y']
+    calibrated_data['accel_z'] = raw_data['accel_z']
+    
     return calibrated_data
 
 # 4. 模型评估函数
@@ -524,6 +532,36 @@ def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibra
     plt.tight_layout()
     # plt.show()
 
+
+def attitude_simulation(data):
+    angles=[[],[],[]]
+    # 初始化 Mahony 滤波器
+    ahrs = MahonyAHRS_NoMag(Kp=0.5, Ki=0.01)
+
+    # 模拟传感器数据（示例）
+    dt = 0.02  # 20ms 时间步长
+    for t in range(len(data['temp'])):
+        # 陀螺仪数据（假设绕 Z 轴旋转）
+        gyro = [data['gyro_x'][t],data['gyro_y'][t],data['gyro_z'][t]]
+        
+        # 加速度计数据（假设静止，指向下方）
+        accel = [data['accel_x'][t],data['accel_y'][t],data['accel_z'][t]]  # 重力加速度
+        
+        # 更新姿态
+        ahrs.update(gyro, accel, dt)
+        
+        # 获取欧拉角
+        roll, pitch, yaw = ahrs.get_euler_angles()
+        # print(f"Roll: {roll:.2f}°, Pitch: {pitch:.2f}°, Yaw: {yaw:.2f}°")
+        # time.sleep(dt)  # 模拟实时运行
+        
+        angles[0].append(roll)
+        angles[1].append(pitch)
+        # angles[2].append(yaw)
+        angles[2].append(0)
+    
+    show_animate(angles)
+
 # 主函数
 def main():
     build_models = False
@@ -551,7 +589,7 @@ def main():
             joblib.dump(models, 'calibration_models.pkl')
         
         # 从单个文件加载全部模型
-        models = joblib.load('calibration_models.pkl')
+        models = joblib.load('calibration_models_50hz.pkl')
         
         display_model_expressions(models)
         
@@ -579,9 +617,9 @@ def main():
 
         visualize_calibrate_data({**temperatures,**accel_g,**gyro_dps})
         
-        
-        plt.show()
+        attitude_simulation(calibrate_data)
 
+        plt.show()
     except Exception as e:
         print(f"处理数据时出错: {e}")
 
