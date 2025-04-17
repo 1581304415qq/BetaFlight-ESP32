@@ -74,12 +74,12 @@ def show_animate(angles):
     vis = VectorVisualizer()
     # 创建动画
     def animate(frame):
-        vis.update({'roll': angles[0][frame], 'pitch': angles[1][frame], 'yaw': angles[2][frame]})
+        vis.update({'roll': angles['roll'][frame], 'pitch': angles['pitch'][frame], 'yaw': 0})
         return (vis.quiver_x, vis.quiver_y, vis.quiver_z)
 
     ani = FuncAnimation(vis.fig, 
                       animate,
-                      frames=range(len(angles[0])),  # 完整旋转360度
+                      frames=range(len(angles['roll'])),  # 完整旋转360度
                       interval=20,                   # 20ms帧间隔
                       blit=False)                    # 3D图形不支持blitting
     

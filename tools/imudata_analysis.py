@@ -1,4 +1,5 @@
 import re
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import font_manager
@@ -9,9 +10,12 @@ from sklearn.metrics import mean_squared_error, r2_score
 import joblib  # 推荐用于大数据模型
 from MahonyAHRS import MahonyAHRS 
 from MahonyAHRS_NoMag import MahonyAHRS_NoMag 
+from MadgwickAHRS import MadgwickAHRS
+from GyroAttitudeEstimator import GyroAttitudeEstimator
 from animate import show_animate
 import time
 
+RAD2DEG = 57.29578
 axes = ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']
 acce_sensitivity = 16384
 gyro_sensitivity = 131
@@ -51,7 +55,7 @@ def calibrate_bias(raw_data, sensitivity=0.00006103515625):
         calibrated_data[key] = values - bias
         if key=='accel_z':
            calibrated_data[key] = calibrated_data[key] + 16384
-    
+    calibrated_data['tamp']=raw_data['tamp']
     return calibrated_data
 
 
@@ -266,7 +270,7 @@ def vectorized_calibrate_gyro(temperatures, raw_data, models):
     temps_reshaped = temperatures.reshape(-1, 1)
     
     # 对每个轴分别预测偏差并应用校准
-    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z']):#,'accel_x', 'accel_y', 'accel_z']):
+    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']):
         # 预测当前轴在所有温度下的偏差
         biases = models[axis].predict(temps_reshaped)
         
@@ -385,34 +389,60 @@ def apply_filters(data, window_size=5):
     
     return filtered_data
 
-def visualize_calibrate_data(data):
+def visualize_calibrate_data(imu_data, angles, gravity):
     # 创建图形和子图（3行2列的布局）
     fig, axs = plt.subplots(2, 3, figsize=(14, 8))
-    time_original = np.arange(len(data['gyro_x']))
+    time_original = np.arange(len(imu_data['gyro_x']))
 
-    axs[0, 0].plot(time_original, data['temp'], label='X轴')
-    axs[0, 0].set_title('温度数据')
-    axs[0, 0].set_ylabel('温度')
+    time_intervals = np.diff(imu_data['tamp'])
+    sampling_frequency = 1000000 / time_intervals
+
+    axs[0, 0].plot(time_original, sampling_frequency[:len(time_original)], label='X轴')
+    axs[0, 0].set_title('采样频率')
+    axs[0, 0].set_ylabel('频率（hz）')
     axs[0, 0].legend()
     axs[0, 0].grid(True)
     
-    axs[0, 1].plot(time_original, data['accel_x'], label='X轴')
-    axs[0, 1].plot(time_original, data['accel_y'], label='Y轴')
-    axs[0, 1].plot(time_original, data['accel_z'], label='Z轴')
+    axs[0, 1].plot(time_original, imu_data['accel_x'], label='X轴')
+    axs[0, 1].plot(time_original, imu_data['accel_y'], label='Y轴')
+    axs[0, 1].plot(time_original, imu_data['accel_z'], label='Z轴')
     axs[0, 1].set_title('加速度数据')
     axs[0, 1].set_ylabel('加速度 (g)')
     axs[0, 1].legend()
     axs[0, 1].grid(True)
     
-    axs[0, 2].plot(time_original, data['gyro_x'], label='X轴')
-    axs[0, 2].plot(time_original, data['gyro_y'], label='Y轴')
-    axs[0, 2].plot(time_original, data['gyro_z'], label='Z轴')
+    axs[0, 2].plot(time_original, imu_data['gyro_x'], label='X轴')
+    axs[0, 2].plot(time_original, imu_data['gyro_y'], label='Y轴')
+    axs[0, 2].plot(time_original, imu_data['gyro_z'], label='Z轴')
     axs[0, 2].set_title('角速度数据')
     axs[0, 2].set_ylabel('角速度 (°/s)')
     axs[0, 2].legend()
     axs[0, 2].grid(True)
     
+    axs[1, 0].plot(time_original, angles['roll'], label='Roll')
+    axs[1, 0].plot(time_original, angles['pitch'], label='Pitch', color='red')
+    axs[1, 0].plot(time_original, angles['yaw'], label='Yaw', color='green')
+    axs[1, 0].set_title('姿态')
+    axs[1, 0].legend()
+    axs[1, 0].grid(True)
     
+    # axs[1, 1].plot(time_original, angles['pitch'], label='Pitch', color='red')
+    # axs[1, 1].set_title('姿态')
+    # axs[1, 1].legend()
+    # axs[1, 1].grid(True)
+
+    # axs[1, 2].plot(time_original, angles['yaw'], label='Yaw', color='green')
+    # axs[1, 2].set_title('姿态')
+    # axs[1, 2].legend()
+    # axs[1, 2].grid(True)
+    
+    axs[1, 1].plot(time_original, gravity['x'], label='gravity X', color='red')
+    axs[1, 1].plot(time_original, gravity['y'], label='gravity Y', color='green')
+    axs[1, 1].plot(time_original, gravity['z'], label='gravity Z', color='blue')
+    axs[1, 1].set_title('重力')
+    axs[1, 1].legend()
+    axs[1, 1].grid(True)
+
     # 调整布局
     plt.tight_layout()
     # plt.show()
@@ -532,15 +562,70 @@ def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibra
     plt.tight_layout()
     # plt.show()
 
+def visualize_attidute(angles):
+    fig, axs = plt.subplots(1, 3, figsize=(8, 6))
+    time_original = np.arange(len(angles['roll']))
 
-def attitude_simulation(data):
-    angles=[[],[],[]]
+    axs[0].plot(time_original, angles['roll'], label='Roll')
+    # axs[0].plot(time_original, angles['pitch'], label='Pitch')
+    # axs[0].plot(time_original, angles['yaw'], label='Yaw')
+    axs[0].set_title('姿态')
+    axs[0].legend()
+    axs[0].grid(True)
+    
+    axs[1].plot(time_original, angles['pitch'], label='Pitch', color='red')
+    axs[1].set_title('姿态')
+    axs[1].legend()
+    axs[1].grid(True)
+
+    axs[2].plot(time_original, angles['yaw'], label='Yaw', color='green')
+    axs[2].set_title('姿态')
+    axs[2].legend()
+    axs[2].grid(True)
+
+def attitude_calculate(data):
+    print(len(data['tamp']),len(data['gyro_x']))
+    angles = {'roll':[], 'pitch':[], 'yaw': []}
     # 初始化 Mahony 滤波器
-    ahrs = MahonyAHRS_NoMag(Kp=0.5, Ki=0.01)
+    '''
+    KP (比例增益)：通常在0.5到5.0之间
+    # KI (积分增益)：通常在0.0到0.1之间
+    KP调整：
+
+    增大KP会使系统更快地响应加速度计/磁力计的校正
+
+    但过大的KP会导致高频振动
+
+    50Hz下典型范围：0.5-2.0
+
+    KI调整：
+
+    KI用于消除稳态误差
+
+    过大的KI会导致超调和振荡
+
+    50Hz下典型范围：0.001-0.02
+
+    调整方法：
+
+    先设KI=0，调整KP直到系统响应快速但不振荡
+
+    然后慢慢增加KI以消除稳态误差
+
+    典型场景参数：
+
+    缓慢运动：KP=0.5-1.0, KI=0.001-0.005
+
+    快速运动：KP=2.0-5.0, KI=0.005-0.02
+
+    高振动环境：KP=0.1-0.5, KI=0.0-0.001
+    '''
+    ahrs = MahonyAHRS(sample_freq=50.0, kp=0.409, ki=0.008)
+    # ahrs = MadgwickAHRS(sample_freq=50.0, beta=0.1)
 
     # 模拟传感器数据（示例）
     dt = 0.02  # 20ms 时间步长
-    for t in range(len(data['temp'])):
+    for t in range(len(data['gyro_x'])):
         # 陀螺仪数据（假设绕 Z 轴旋转）
         gyro = [data['gyro_x'][t],data['gyro_y'][t],data['gyro_z'][t]]
         
@@ -548,19 +633,106 @@ def attitude_simulation(data):
         accel = [data['accel_x'][t],data['accel_y'][t],data['accel_z'][t]]  # 重力加速度
         
         # 更新姿态
-        ahrs.update(gyro, accel, dt)
+        ahrs.update_imu(gyro[0]/RAD2DEG, gyro[1]/RAD2DEG, gyro[2]/RAD2DEG, accel[0], accel[1], accel[2])
+
+        # q0, q1, q2, q3 = ahrs.get_quaternion()
+        # print(f"Quaternion: ({q0:.4f}, {q1:.4f}, {q2:.4f}, {q3:.4f})")
         
         # 获取欧拉角
         roll, pitch, yaw = ahrs.get_euler_angles()
         # print(f"Roll: {roll:.2f}°, Pitch: {pitch:.2f}°, Yaw: {yaw:.2f}°")
-        # time.sleep(dt)  # 模拟实时运行
         
-        angles[0].append(roll)
-        angles[1].append(pitch)
-        # angles[2].append(yaw)
-        angles[2].append(0)
+        angles['roll'].append(roll)
+        angles['pitch'].append(pitch)
+        angles['yaw'].append(yaw)
     
-    show_animate(angles)
+    return angles
+    
+def attitude_integral(data):
+    angles = {'roll':[], 'pitch':[], 'yaw': []}
+    estimator = GyroAttitudeEstimator()
+    for i in range(len(data['gyro_x'])):
+        gyro_data={'gyro_x': data['gyro_x'][i],  
+                    'gyro_y': data['gyro_y'][i], 
+                    'gyro_z': data['gyro_z'][i]
+                    }
+        estimator.update(gyro_data, data['tamp'][i]/1000000)
+        attitude = estimator.get_attitude()
+        angles['roll'].append(attitude['roll'])
+        angles['pitch'].append(attitude['pitch'])
+        angles['yaw'].append(attitude['yaw'])
+    return angles
+
+'''
+    Convert degrees to radians for the example
+    roll_deg = 30
+    pitch_deg = 45
+    
+    roll_rad = math.radians(roll_deg)
+    pitch_rad = math.radians(pitch_deg)
+    
+    gx, gy, gz = gravity_components(roll_rad, pitch_rad)
+    
+    print(f"For roll = {roll_deg}° and pitch = {pitch_deg}°:")
+    print(f"Gravity components:")
+    print(f"gx = {gx:.4f} m/s²")
+    print(f"gy = {gy:.4f} m/s²") 
+    print(f"gz = {gz:.4f} m/s²")
+    
+    # Verify that magnitude is still g
+    magnitude = math.sqrt(gx*gx + gy*gy + gz*gz)
+    print(f"Magnitude = {magnitude:.4f} m/s² (should be close to 9.81)")
+'''
+
+def gravity_components(roll, pitch, g=9.81):
+    """
+    Calculate the components of gravity vector on x, y, and z axes
+    given roll and pitch angles.
+    
+    Args:
+        roll: Roll angle in radians (rotation around x-axis)
+        pitch: Pitch angle in radians (rotation around y-axis)
+        g: Gravity constant, default is 9.81 m/s²
+    
+    Returns:
+        tuple: (gx, gy, gz) components of gravity on each axis
+    """
+    # Create rotation matrix for roll (around x-axis)
+    R_roll = np.array([
+        [1, 0, 0],
+        [0, math.cos(roll), -math.sin(roll)],
+        [0, math.sin(roll), math.cos(roll)]
+    ])
+    
+    # Create rotation matrix for pitch (around y-axis)
+    R_pitch = np.array([
+        [math.cos(pitch), 0, math.sin(pitch)],
+        [0, 1, 0],
+        [-math.sin(pitch), 0, math.cos(pitch)]
+    ])
+    
+    # Combine rotations (first roll, then pitch)
+    R = np.matmul(R_pitch, R_roll)
+    
+    # Gravity vector in world frame (pointing down in z-axis)
+    gravity_world = np.array([0, 0, g])
+    
+    # Rotate gravity to body frame
+    gravity_body = np.matmul(R.transpose(), gravity_world)
+    
+    # Extract components
+    gx, gy, gz = gravity_body
+    
+    return gx, gy, gz
+
+def gravity_calculate(attidudes, g=9.81):
+    g_xyz={'x':[],'y':[],'z':[]}
+    for  i in range(len(attidudes['roll'])):
+        gx,gy,gz=gravity_components(attidudes['roll'][i]/RAD2DEG, attidudes['pitch'][i]/RAD2DEG, g)
+        g_xyz['x'].append(gx)
+        g_xyz['y'].append(gy)
+        g_xyz['z'].append(gz)
+    return g_xyz
 
 # 主函数
 def main():
@@ -578,15 +750,13 @@ def main():
         # 应用滤波
         filtered_data = apply_filters(original_data, window_size)
         
-        # 零偏校准
-        calibrate_data = calibrate_bias(filtered_data)
         
         if build_models:
             # 建立误差模型
             models = build_calibration_model(filtered_data['temp'],filtered_data)
             
             # 保存三个轴的校准模型到单个文件
-            joblib.dump(models, 'calibration_models.pkl')
+            joblib.dump(models, 'calibration_models_50hz.pkl')
         
         # 从单个文件加载全部模型
         models = joblib.load('calibration_models_50hz.pkl')
@@ -604,9 +774,11 @@ def main():
         #     calibrated_data['gyro_y'].append(calibrated_gyro[1])
         #     calibrated_data['gyro_z'].append(calibrated_gyro[2])
 
+        # 零偏校准
+        # calibrated_data = calibrate_bias(filtered_data)
         calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'],filtered_data,models)
+        visualize_mpu6050_data(original_data, filtered_data, calibrated_data, calibrated_data)
 
-        visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibrated_data)
         
         # 温度转换
         temperatures = convertTemp(calibrated_data)
@@ -615,9 +787,18 @@ def main():
         # 角速度转换
         gyro_dps = convertGyro(calibrated_data)
 
-        visualize_calibrate_data({**temperatures,**accel_g,**gyro_dps})
+        angles = attitude_calculate({'tamp':original_data['tamp'],**accel_g,**gyro_dps})
+        # angles = attitude_integral({'tamp':original_data['tamp'], **accel_g, **gyro_dps})
+    
+        g_xyz = gravity_calculate(angles)
+        # print(g_xyz)
+
+        visualize_calibrate_data({'tamp':original_data['tamp'],**accel_g,**gyro_dps},angles=angles,gravity=g_xyz)
+        # print(angles)
+        # visualize_attidute(angles=angles)
+        show_animate(angles)
         
-        attitude_simulation(calibrate_data)
+
 
         plt.show()
     except Exception as e:
