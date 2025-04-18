@@ -19,6 +19,7 @@ RAD2DEG = 57.29578
 axes = ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']
 acce_sensitivity = 16384
 gyro_sensitivity = 131
+g                = 9.81
 
 # 温度转换
 def convertTemp(raw_data): 
@@ -94,7 +95,7 @@ def vectorized_calibrate_gyro(temperatures, raw_data, models):
         
         # 从原始数据中减去偏差，得到校准后的数据
         calibrated_data[axis] = raw_data[axis] - biases
-        
+
     return calibrated_data
 
 # 2. 建立二次多项式回归模型 y = β₀ + β₁·T + β₂·T²
@@ -387,7 +388,7 @@ def apply_filters(data, window_size=5):
     
     return filtered_data
 
-def visualize_calibrate_data(imu_data, angles, gravity):
+def visualize_calibrate_data(imu_data, angles, gravity, accel):
     # 创建图形和子图（3行2列的布局）
     fig, axs = plt.subplots(2, 3, figsize=(14, 8))
     time_original = np.arange(len(imu_data['gyro_x']))
@@ -434,12 +435,21 @@ def visualize_calibrate_data(imu_data, angles, gravity):
     # axs[1, 2].legend()
     # axs[1, 2].grid(True)
     
-    axs[1, 1].plot(time_original, gravity['x'], label='gravity X', color='red')
-    axs[1, 1].plot(time_original, gravity['y'], label='gravity Y', color='green')
-    axs[1, 1].plot(time_original, gravity['z'], label='gravity Z', color='blue')
+    axs[1, 1].plot(time_original, gravity['x'], label='gravity X')
+    axs[1, 1].plot(time_original, gravity['y'], label='gravity Y')
+    axs[1, 1].plot(time_original, gravity['z'], label='gravity Z')
     axs[1, 1].set_title('重力')
+    axs[1, 1].set_ylabel('重力加速度 (g)')
     axs[1, 1].legend()
     axs[1, 1].grid(True)
+
+    axs[1, 2].plot(time_original, accel['x'], label='accel X')
+    axs[1, 2].plot(time_original, accel['y'], label='accel Y')
+    axs[1, 2].plot(time_original, accel['z'], label='accel Z')
+    axs[1, 2].set_title('运动加速度')
+    axs[1, 2].set_ylabel('运动加速度 (g)')
+    axs[1, 2].legend()
+    axs[1, 2].grid(True)
 
     # 调整布局
     plt.tight_layout()
@@ -682,7 +692,7 @@ def attitude_integral(data):
     print(f"Magnitude = {magnitude:.4f} m/s² (should be close to 9.81)")
 '''
 
-def gravity_components(roll, pitch, g=9.81):
+def gravity_components(roll, pitch):
     """
     Calculate the components of gravity vector on x, y, and z axes
     given roll and pitch angles.
@@ -713,7 +723,7 @@ def gravity_components(roll, pitch, g=9.81):
     R = np.matmul(R_pitch, R_roll)
     
     # Gravity vector in world frame (pointing down in z-axis)
-    gravity_world = np.array([0, 0, g])
+    gravity_world = np.array([0, 0, 1])
     
     # Rotate gravity to body frame
     gravity_body = np.matmul(R.transpose(), gravity_world)
@@ -723,10 +733,10 @@ def gravity_components(roll, pitch, g=9.81):
     
     return gx, gy, gz
 
-def gravity_calculate(attidudes, g=9.81):
+def gravity_calculate(attidudes):
     g_xyz={'x':[],'y':[],'z':[]}
     for  i in range(len(attidudes['roll'])):
-        gx,gy,gz = gravity_components(attidudes['roll'][i]/RAD2DEG, attidudes['pitch'][i]/RAD2DEG, g)
+        gx,gy,gz = gravity_components(attidudes['roll'][i]/RAD2DEG, attidudes['pitch'][i]/RAD2DEG)
         g_xyz['x'].append(gx)
         g_xyz['y'].append(gy)
         g_xyz['z'].append(gz)
@@ -773,15 +783,15 @@ def main():
         #     calibrated_data['gyro_z'].append(calibrated_gyro[2])
 
         # 零偏校准
-        calibrated_data = calibrate_accel(filtered_data)
-        calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'], calibrated_data, models)
-        # calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'], filtered_data, models)
+        # calibrated_data = calibrate_accel(filtered_data)
+        # calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'], calibrated_data, models)
+        calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'], filtered_data, models)
         visualize_mpu6050_data(original_data, filtered_data, calibrated_data, calibrated_data)
 
         
         # 温度转换
         temperatures = convertTemp(calibrated_data)
-        # 加速度转换
+        # 加速度转换(g)
         accel_g = convertAccel(calibrated_data)
         # 角速度转换
         gyro_dps = convertGyro(calibrated_data)
@@ -789,16 +799,23 @@ def main():
         angles = attitude_calculate({'tamp':original_data['tamp'],**accel_g,**gyro_dps})
         # angles = attitude_integral({'tamp':original_data['tamp'], **accel_g, **gyro_dps})
     
+        # 计算重力加速度在x,y,z轴上的分量
+        # {'x':[],'y':[],'z':[]}
         g_xyz = gravity_calculate(angles)
         # print(g_xyz)
 
-        visualize_calibrate_data({'tamp':original_data['tamp'],**accel_g,**gyro_dps},angles=angles,gravity=g_xyz)
         # print(angles)
         # visualize_attidute(angles=angles)
-        show_animate(angles)
         
+        # 计算物体的运动加速度
+        accel = {}
+        accel['x'] = accel_g['accel_x'] - g_xyz['x']
+        accel['y'] = accel_g['accel_y'] - g_xyz['y']
+        accel['z'] = accel_g['accel_z'] - g_xyz['z']
 
+        visualize_calibrate_data({'tamp':original_data['tamp'],**accel_g,**gyro_dps},angles=angles,gravity=g_xyz,accel=accel)
 
+        show_animate(angles)
         plt.show()
     except Exception as e:
         print(f"处理数据时出错: {e}")
