@@ -43,21 +43,59 @@ def convertGyro(raw_data):
 # ========================
 # 零偏校准核心算法
 # ========================
-def calibrate_bias(raw_data, sensitivity=0.00006103515625):
+def calibrate_accel(raw_data):
     #返回的 calibrated_data 数据结构与原数据相同
-    calibrated_data={}
+    calibrated_data = {
+        'gyro_x': raw_data['gyro_x'],
+        'gyro_y': raw_data['gyro_y'],
+        'gyro_z': raw_data['gyro_z'],
+        'temp'  : raw_data['temp'],
+        'tamp'  : raw_data['tamp']
+    }
     """执行零偏校准并返回校准后的数据"""
-    for key, values in raw_data.items():
+    for i, axis in enumerate(['accel_x', 'accel_y', 'accel_z']):
         # 计算零偏（平均值）
-        bias = np.mean(values)
-        
+        bias = np.mean(raw_data[axis])
         # 应用校准
-        calibrated_data[key] = values - bias
-        if key=='accel_z':
-           calibrated_data[key] = calibrated_data[key] + 16384
-    calibrated_data['tamp']=raw_data['tamp']
+        calibrated_data[axis] = raw_data[axis] - bias
+        if axis == 'accel_z':
+           calibrated_data[axis] = calibrated_data[axis] + 16384
+
     return calibrated_data
 
+def vectorized_calibrate_gyro(temperatures, raw_data, models):
+    """
+    向量化版本的陀螺仪校准函数，一次处理整个数据集
+    
+    参数:
+    temperatures: 温度数据数组 (n,)
+    raw_data: 原始陀螺仪数据 ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']，每个是长度为n的数组
+    models: 校准模型列表，长度为3，对应x、y、z轴
+    
+    返回:
+    calibrated_data: 包含校准后数据的字典
+    """
+    n_samples = len(temperatures)
+    calibrated_data = {
+        'tamp': raw_data['tamp'],
+        'temp': raw_data['temp'],
+        'accel_x': raw_data['accel_x'],
+        'accel_y': raw_data['accel_y'],
+        'accel_z': raw_data['accel_z'],
+    }
+    
+    # 将温度数据重塑为模型所需的形状
+    temps_reshaped = temperatures.reshape(-1, 1)
+    
+    # 对每个轴分别预测偏差并应用校准
+    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z']):
+        # 预测当前轴在所有温度下的偏差
+        biases = models[axis].predict(temps_reshaped)
+        
+        # 从原始数据中减去偏差，得到校准后的数据
+        calibrated_data[axis] = raw_data[axis] - biases
+        
+    return calibrated_data
 
 # 2. 建立二次多项式回归模型 y = β₀ + β₁·T + β₂·T²
 def build_calibration_model(temperatures, imu_readings):
@@ -243,46 +281,6 @@ def calibrate_gyro(temperature, raw_data, models):
         calibrated_gyro[i] = raw_data[axis] - bias
     
     return calibrated_gyro
-
-def vectorized_calibrate_gyro(temperatures, raw_data, models):
-    """
-    向量化版本的陀螺仪校准函数，一次处理整个数据集
-    
-    参数:
-    temperatures: 温度数据数组 (n,)
-    raw_data: 原始陀螺仪数据 ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']，每个是长度为n的数组
-    models: 校准模型列表，长度为3，对应x、y、z轴
-    
-    返回:
-    calibrated_data: 包含校准后数据的字典
-    """
-    n_samples = len(temperatures)
-    calibrated_data = {
-        'gyro_x': np.zeros(n_samples),
-        'gyro_y': np.zeros(n_samples),
-        'gyro_z': np.zeros(n_samples),
-        # 'accel_x': np.zeros(n_samples),
-        # 'accel_y': np.zeros(n_samples),
-        # 'accel_z': np.zeros(n_samples),
-    }
-    
-    # 将温度数据重塑为模型所需的形状
-    temps_reshaped = temperatures.reshape(-1, 1)
-    
-    # 对每个轴分别预测偏差并应用校准
-    for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']):
-        # 预测当前轴在所有温度下的偏差
-        biases = models[axis].predict(temps_reshaped)
-        
-        # 从原始数据中减去偏差，得到校准后的数据
-        calibrated_data[axis] = raw_data[axis] - biases
-    
-    calibrated_data['temp'] = raw_data['temp']
-    calibrated_data['accel_x'] = raw_data['accel_x']
-    calibrated_data['accel_y'] = raw_data['accel_y']
-    calibrated_data['accel_z'] = raw_data['accel_z']
-    
-    return calibrated_data
 
 # 4. 模型评估函数
 def evaluate_model(models, temperatures, imu_readings):
@@ -728,7 +726,7 @@ def gravity_components(roll, pitch, g=9.81):
 def gravity_calculate(attidudes, g=9.81):
     g_xyz={'x':[],'y':[],'z':[]}
     for  i in range(len(attidudes['roll'])):
-        gx,gy,gz=gravity_components(attidudes['roll'][i]/RAD2DEG, attidudes['pitch'][i]/RAD2DEG, g)
+        gx,gy,gz = gravity_components(attidudes['roll'][i]/RAD2DEG, attidudes['pitch'][i]/RAD2DEG, g)
         g_xyz['x'].append(gx)
         g_xyz['y'].append(gy)
         g_xyz['z'].append(gz)
@@ -775,8 +773,9 @@ def main():
         #     calibrated_data['gyro_z'].append(calibrated_gyro[2])
 
         # 零偏校准
-        # calibrated_data = calibrate_bias(filtered_data)
-        calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'],filtered_data,models)
+        calibrated_data = calibrate_accel(filtered_data)
+        calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'], calibrated_data, models)
+        # calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'], filtered_data, models)
         visualize_mpu6050_data(original_data, filtered_data, calibrated_data, calibrated_data)
 
         
