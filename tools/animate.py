@@ -48,33 +48,69 @@ class VectorVisualizer:
         self.ax.set_zlabel('Z')
         self.ax.view_init(elev=20, azim=30)  # 设置初始视角
         self.ax.legend()
-        
 
-    def update(self, angles):
+        # 新增位移参数
+        self.position = np.array([0.0, 0.0, 0.0])  # 初始位置
+        
+        # 绘制位移轨迹
+        self.trajectory, = self.ax.plot([], [], [], 'g--', lw=0.5)
+        self.history = []  # 轨迹记录
+
+    def update(self, angles, displacement):
         """更新坐标系可视化"""
         roll, pitch, yaw = angles['roll'], angles['pitch'], angles['yaw']
         
+        # 解析位移参数
+        dx, dy, dz = displacement['x'], displacement['y'], displacement['z']
+        self.position = np.array([dx, dy, dz])
+
         # 计算旋转矩阵
         R = euler_to_rotation_matrix(roll, pitch, yaw)
         
-        # 应用旋转
-        new_x = R @ self.x_axis
-        new_y = R @ self.y_axis
-        new_z = R @ self.z_axis
+        # 应用旋转和平移
+        new_origin = self.position
+        new_x = new_origin + R @ self.x_axis
+        new_y = new_origin + R @ self.y_axis
+        new_z = new_origin + R @ self.z_axis
+        # new_x = R @ self.x_axis
+        # new_y = R @ self.y_axis
+        # new_z = R @ self.z_axis
 
         # 更新箭头（修正转置错误）
-        self.quiver_x.set_segments([np.array([self.origin, new_x])])
-        self.quiver_y.set_segments([np.array([self.origin, new_y])])
-        self.quiver_z.set_segments([np.array([self.origin, new_z])])
+        self.quiver_x.set_segments([np.array([self.position, new_x])])
+        self.quiver_y.set_segments([np.array([self.position, new_y])])
+        self.quiver_z.set_segments([np.array([self.position, new_z])])
+         # 更新轨迹
+        self.history.append(new_origin.copy())
+        if len(self.history) > 100:  # 保留最近100个点
+            self.history.pop(0)
+        trajectory_data = np.array(self.history)
+        self.trajectory.set_data(trajectory_data[:,0], trajectory_data[:,1])
+        self.trajectory.set_3d_properties(trajectory_data[:,2])
+
+        # 自动调整坐标范围
+        self.ax.set_xlim([new_origin[0]-2, new_origin[0]+2])
+        self.ax.set_ylim([new_origin[1]-2, new_origin[1]+2])
+        self.ax.set_zlim([new_origin[2]-2, new_origin[2]+2])
         
         # 重绘图形
         plt.draw()
 
-def show_animate(angles):
+def show_animate(angles, displacements):
     vis = VectorVisualizer()
     # 创建动画
     def animate(frame):
-        vis.update({'roll': angles['roll'][frame], 'pitch': angles['pitch'][frame], 'yaw': 0})
+        angle_data = {
+            'roll': angles['roll'][frame],
+            'pitch': angles['pitch'][frame],
+            'yaw': angles['yaw'][frame]
+        }
+        disp_data = {
+            'x': displacements['x'][frame],
+            'y': displacements['y'][frame],
+            'z': displacements['z'][frame]
+        }
+        vis.update(angles=angle_data, displacement=disp_data)
         return (vis.quiver_x, vis.quiver_y, vis.quiver_z)
 
     ani = FuncAnimation(vis.fig, 
@@ -85,6 +121,20 @@ def show_animate(angles):
     
     plt.show()
 
-# if __name__ == "__main__":
-#     angles=[np.arange(0, 360, 1),np.arange(0, 360, 1),np.arange(0, 360, 1)]
-#     show_animate(angles)
+if __name__ == "__main__":
+    num_frames = 360
+    t = np.linspace(0, 4*np.pi, num_frames)
+   # 旋转角度参数
+    angles = {
+        'roll': 10*np.sin(t),
+        'pitch': 15*np.cos(0.5*t),
+        'yaw': 0*np.linspace(0, 360, num_frames)
+    }
+    
+    displacements = {
+        'x': 0.1*np.sin(t),
+        'y': 0.1*np.cos(t),
+        'z': np.zeros(len(t))
+    }
+    
+    show_animate(angles, displacements)
