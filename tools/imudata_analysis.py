@@ -22,36 +22,37 @@ acce_sensitivity = 16384
 gyro_sensitivity = 131
 g                = 9.81
 
-calibration_gyro_models = 'calibration_models_50hz.pkl'
-# calibration_gyro_models = 'calibration_gyro_models_50hz.pkl'
+# calibration_gyro_models = 'models/calibration_models_50hz.pkl'
+calibration_gyro_models = 'models/calibration_gyro_models_50hz.pkl'
 calibration_accel_models = 'calibration_accel_models_50hz.pkl'
 
 # 温度转换
 def convertTemp(raw_data): 
-    data={}
-    data['temp'] = raw_data['temp'] / 340.00 + 36.53
-    return data
+    return {
+        **raw_data,  # 保留原始数据中所有键值对
+        'temp': raw_data['temp'] / 340.0 + 36.53  # 仅修改温度值
+    }
 # 加速度转换
 def convertAccel(raw_data):
     data = {}
     data['accel_x'] = raw_data['accel_x'] / acce_sensitivity
     data['accel_y'] = raw_data['accel_y'] / acce_sensitivity
     data['accel_z'] = raw_data['accel_z'] / acce_sensitivity
-    return data
+    return {**raw_data,**data}
 # 角速度转换
 def convertGyro(raw_data): 
     data = {}
     data['gyro_x'] = raw_data['gyro_x'] / gyro_sensitivity
     data['gyro_y'] = raw_data['gyro_y'] / gyro_sensitivity
     data['gyro_z'] = raw_data['gyro_z'] / gyro_sensitivity
-    return data
+    return {**raw_data,**data}
     
 # ========================
 # 零偏校准核心算法
 # ========================
 
 # 建立二次多项式回归模型 y = β₀ + β₁·T + β₂·T²
-def build_calibration_gyro_model(temperatures, imu_readings):
+def build_calibration_gyro_model(imu_readings):
     """
     为每个陀螺仪轴建立二次多项式校准模型
     
@@ -64,7 +65,6 @@ def build_calibration_gyro_model(temperatures, imu_readings):
     """
     models = {}
     
-    # for axis in range(3):
     for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z']):
         # 创建二次多项式回归模型管道
         model = Pipeline([
@@ -73,7 +73,7 @@ def build_calibration_gyro_model(temperatures, imu_readings):
         ])
         
         # 训练模型
-        X = temperatures.reshape(-1, 1)
+        X = imu_readings['temp'].reshape(-1, 1)
         y = imu_readings[axis]
         model.fit(X, y)
         
@@ -81,7 +81,7 @@ def build_calibration_gyro_model(temperatures, imu_readings):
     
     return models
 
-def vectorized_calibrate_gyro(temperatures, raw_data, models):
+def vectorized_calibrate_gyro(raw_data, models):
     """
     向量化版本的陀螺仪校准函数，一次处理整个数据集
     
@@ -93,7 +93,6 @@ def vectorized_calibrate_gyro(temperatures, raw_data, models):
     返回:
     calibrated_data: 包含校准后数据的字典
     """
-    n_samples = len(temperatures)
     calibrated_data = {
         'tamp': raw_data['tamp'],
         'temp': raw_data['temp'],
@@ -103,7 +102,7 @@ def vectorized_calibrate_gyro(temperatures, raw_data, models):
     }
     
     # 将温度数据重塑为模型所需的形状
-    temps_reshaped = temperatures.reshape(-1, 1)
+    temps_reshaped = raw_data['temp'].reshape(-1, 1)
     
     # 对每个轴分别预测偏差并应用校准
     for i, axis in enumerate(['gyro_x', 'gyro_y', 'gyro_z']):
@@ -210,6 +209,21 @@ def calibrate_accel(raw_reading, model):
     calibrated_data['accel_z'] = caba[:, 2]
 
     return calibrated_data
+
+def calibrate_accel_bias(raw_data):
+    #返回的 calibrated_data 数据结构与原数据相同
+    calibrated_data={}
+    """执行零偏校准并返回校准后的数据"""
+    for i, axis in enumerate(['accel_x', 'accel_y', 'accel_z']):
+        # 计算零偏（平均值）
+        bias = np.mean(raw_data[axis])
+        
+        # 应用校准
+        calibrated_data[axis] = raw_data[axis] - bias
+        if axis == 'accel_z':
+           calibrated_data[axis] = calibrated_data[axis] + 1
+    
+    return {**raw_data,**calibrated_data}
 
 # 获取X轴模型表达式、
 def display_model_expressions(models, precision=6):
@@ -366,7 +380,7 @@ def calibrate_gyro(temperature, raw_data, models):
     return calibrated_gyro
 
 # 4. 模型评估函数
-def evaluate_model(models, temperatures, imu_readings):
+def evaluate_gyro_model(models, imu_readings):
     """
     评估校准模型的性能
     
@@ -379,12 +393,12 @@ def evaluate_model(models, temperatures, imu_readings):
     metrics: 性能指标字典
     """
     metrics = {'r2': [], 'rmse': []}
-    axes = ['gyro_x', 'gyro_y', 'gyro_z','accel_x', 'accel_y', 'accel_z']
+    axes = ['gyro_x', 'gyro_y', 'gyro_z']
     
     # for axis in range(3):
     for i, axis in enumerate(axes):
         model = models[axis]
-        X = temperatures.reshape(-1, 1)
+        X = imu_readings['temp'].reshape(-1, 1)
         y_true = imu_readings[axis]
         y_pred = model.predict(X)
         
@@ -470,7 +484,7 @@ def apply_filters(data, window_size=5):
     
     return filtered_data
 
-def visualize_calibrate_data(imu_data, angles, gravity, accel, displacement):
+def visualize_calibrate_data(imu_data, angles, gravity, accel, positions):
     # 创建图形和子图（3行2列的布局）
     fig, axs = plt.subplots(2, 4, figsize=(14, 8))
     time_original = np.arange(len(imu_data['gyro_x']))
@@ -502,20 +516,10 @@ def visualize_calibrate_data(imu_data, angles, gravity, accel, displacement):
     
     axs[1, 0].plot(time_original, angles['roll'], label='Roll')
     axs[1, 0].plot(time_original, angles['pitch'], label='Pitch', color='red')
-    axs[1, 0].plot(time_original, angles['yaw'], label='Yaw', color='green')
+    # axs[1, 0].plot(time_original, angles['yaw'], label='Yaw', color='green')
     axs[1, 0].set_title('姿态')
     axs[1, 0].legend()
     axs[1, 0].grid(True)
-    
-    # axs[1, 1].plot(time_original, angles['pitch'], label='Pitch', color='red')
-    # axs[1, 1].set_title('姿态')
-    # axs[1, 1].legend()
-    # axs[1, 1].grid(True)
-
-    # axs[1, 2].plot(time_original, angles['yaw'], label='Yaw', color='green')
-    # axs[1, 2].set_title('姿态')
-    # axs[1, 2].legend()
-    # axs[1, 2].grid(True)
     
     axs[1, 1].plot(time_original, gravity['x'], label='gravity X')
     axs[1, 1].plot(time_original, gravity['y'], label='gravity Y')
@@ -529,14 +533,14 @@ def visualize_calibrate_data(imu_data, angles, gravity, accel, displacement):
     axs[1, 2].plot(time_original, accel['y'], label='accel Y')
     axs[1, 2].plot(time_original, accel['z'], label='accel Z')
     axs[1, 2].set_title('运动加速度')
-    axs[1, 2].set_ylabel('运动加速度 (g)')
+    axs[1, 2].set_ylabel('运动加速度 (m/s²)')
     axs[1, 2].legend()
     axs[1, 2].grid(True)
 
-    axs[1, 3].plot(time_original, displacement['x'], label='displacement X')
-    axs[1, 3].plot(time_original, displacement['y'], label='displacement Y')
-    axs[1, 3].plot(time_original, displacement['z'], label='displacement Z')
-    axs[1, 3].set_title('位移（m）')
+    axs[1, 3].plot(time_original, positions['x'], label='positions X')
+    axs[1, 3].plot(time_original, positions['y'], label='positions Y')
+    axs[1, 3].plot(time_original, positions['z'], label='positions Z')
+    axs[1, 3].set_title('位置（m）')
     axs[1, 3].legend()
     axs[1, 3].grid(True)
 
@@ -544,14 +548,14 @@ def visualize_calibrate_data(imu_data, angles, gravity, accel, displacement):
     plt.tight_layout()
     # plt.show()
     
-def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibrated_data):
+def visualize_mpu6050_data(original_data, filtered_data, calibrated_data):
     """可视化原始数据和滤波后的数据对比"""
     # 创建时间轴
     time_original = np.arange(len(original_data['accel_x']))
     time_filtered = np.arange(len(filtered_data['accel_x']))
     
     # 创建图形和子图（3行2列的布局）
-    fig, axs = plt.subplots(4, 4, figsize=(15, 12))
+    fig, axs = plt.subplots(3, 3, figsize=(15, 12))
     fig.set_size_inches(14, 8)  # 实时修改为8x6英寸‌:ml-citation{ref="5,6" data="citationList"}
 
     # 绘制加速度计数据对比
@@ -564,6 +568,15 @@ def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibra
     axs[0, 0].legend()
     axs[0, 0].grid(True)
     
+    # 原始数据
+    axs[1, 0].plot(time_original, original_data['gyro_x'], label='X轴')
+    axs[1, 0].plot(time_original, original_data['gyro_y'], label='Y轴')
+    axs[1, 0].plot(time_original, original_data['gyro_z'], label='Z轴')
+    axs[1, 0].set_title('原始陀螺仪数据')
+    axs[1, 0].set_ylabel('角速度 (原始值)')
+    axs[1, 0].legend()
+    axs[1, 0].grid(True)
+
     # 滤波后数据
     axs[0, 1].plot(time_filtered, filtered_data['accel_x'], label='X轴')
     axs[0, 1].plot(time_filtered, filtered_data['accel_y'], label='Y轴')
@@ -573,33 +586,6 @@ def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibra
     axs[0, 1].legend()
     axs[0, 1].grid(True)
     
-    # 校准后数据
-    axs[0, 2].plot(time_filtered, calibrate_data['accel_x'], label='X轴')
-    axs[0, 2].plot(time_filtered, calibrate_data['accel_y'], label='Y轴')
-    axs[0, 2].plot(time_filtered, calibrate_data['accel_z'], label='Z轴')
-    axs[0, 2].set_title('校准加速度计数据(平均值)')
-    axs[0, 2].set_ylabel('加速度 (校准值)')
-    axs[0, 2].legend()
-    axs[0, 2].grid(True)
-    
-    axs[0, 3].plot(time_filtered, calibrated_data['accel_x'], label='X轴')
-    axs[0, 3].plot(time_filtered, calibrated_data['accel_y'], label='Y轴')
-    axs[0, 3].plot(time_filtered, calibrated_data['accel_z'], label='Z轴')
-    axs[0, 3].set_title('校准加速度计数据(线性回归)')
-    axs[0, 3].set_ylabel('加速度 (校准值)')
-    axs[0, 3].legend()
-    axs[0, 3].grid(True)
-    
-    # 绘制陀螺仪数据对比
-    # 原始数据
-    axs[1, 0].plot(time_original, original_data['gyro_x'], label='X轴')
-    axs[1, 0].plot(time_original, original_data['gyro_y'], label='Y轴')
-    axs[1, 0].plot(time_original, original_data['gyro_z'], label='Z轴')
-    axs[1, 0].set_title('原始陀螺仪数据')
-    axs[1, 0].set_ylabel('角速度 (原始值)')
-    axs[1, 0].legend()
-    axs[1, 0].grid(True)
-    
     # 滤波后数据
     axs[1, 1].plot(time_filtered, filtered_data['gyro_x'], label='X轴')
     axs[1, 1].plot(time_filtered, filtered_data['gyro_y'], label='Y轴')
@@ -608,52 +594,47 @@ def visualize_mpu6050_data(original_data, filtered_data, calibrate_data, calibra
     axs[1, 1].set_ylabel('角速度 (滤波值)')
     axs[1, 1].legend()
     axs[1, 1].grid(True)
+
+    # 校准后数据
+    axs[0, 2].plot(time_filtered, calibrated_data['accel_x'], label='X轴')
+    axs[0, 2].plot(time_filtered, calibrated_data['accel_y'], label='Y轴')
+    axs[0, 2].plot(time_filtered, calibrated_data['accel_z'], label='Z轴')
+    axs[0, 2].set_title('校准加速度计数据(六面法)')
+    axs[0, 2].set_ylabel('加速度 (校准值)')
+    axs[0, 2].legend()
+    axs[0, 2].grid(True)
     
     # 校准后数据
-    axs[1, 2].plot(time_filtered, calibrate_data['gyro_x'], label='X轴')
-    axs[1, 2].plot(time_filtered, calibrate_data['gyro_y'], label='Y轴')
-    axs[1, 2].plot(time_filtered, calibrate_data['gyro_z'], label='Z轴')
-    axs[1, 2].set_title('校准角速度计数据(平均值)')
-    axs[1, 2].set_ylabel('角速度 (校准值)')
+    axs[1, 2].plot(time_filtered, calibrated_data['gyro_x'], label='X轴')
+    axs[1, 2].plot(time_filtered, calibrated_data['gyro_y'], label='Y轴')
+    axs[1, 2].plot(time_filtered, calibrated_data['gyro_z'], label='Z轴')
+    axs[1, 2].set_title('校准角速度计数据(线性回归)')
+    axs[1, 2].set_ylabel('角速度 (°/s)')
     axs[1, 2].legend()
     axs[1, 2].grid(True)
     
-    axs[1, 3].plot(time_filtered, calibrated_data['gyro_x'], label='X轴')
-    axs[1, 3].plot(time_filtered, calibrated_data['gyro_y'], label='Y轴')
-    axs[1, 3].plot(time_filtered, calibrated_data['gyro_z'], label='Z轴')
-    axs[1, 3].set_title('校准角速度计数据(线性回归)')
-    axs[1, 3].set_ylabel('角速度 (校准值)')
-    axs[1, 3].legend()
-    axs[1, 3].grid(True)
     
-    # 绘制温度数据对比
     # 原始数据
     axs[2, 0].plot(time_original, original_data['temp'], color='red')
     axs[2, 0].set_title('原始温度数据')
     axs[2, 0].set_xlabel('样本点')
     axs[2, 0].set_ylabel('温度 (原始值)')
     axs[2, 0].grid(True)
-    
+
     # 滤波后数据
-    axs[2, 1].plot(time_filtered, filtered_data['temp'], color='red')
+    axs[2, 1].plot(time_filtered, calibrated_data['temp'], color='red')
     axs[2, 1].set_title('滤波后温度数据')
     axs[2, 1].set_xlabel('样本点')
-    axs[2, 1].set_ylabel('温度 (滤波值)')
+    axs[2, 1].set_ylabel('温度 (度)')
     axs[2, 1].grid(True)
-    
-    # 时间戳
-    # axs[3, 0].plot(time_original, original_data['tamp'], color='green')
-    # axs[3, 0].set_title('时间戳')
-    # axs[3, 0].set_xlabel('样本点')
-    # axs[3, 0].grid(True)
     
     time_intervals = np.diff(original_data['tamp'])
     sampling_frequency = 1000000 / time_intervals
     
     # 采用频率
-    axs[3, 0].plot(time_original[:-1], sampling_frequency, color='green')
-    axs[3, 0].set_title('采样频率')
-    axs[3, 0].grid(True)
+    axs[2, 2].plot(time_original[:-1], sampling_frequency, color='green')
+    axs[2, 2].set_title('采样频率')
+    axs[2, 2].grid(True)
     
     # 调整布局
     plt.tight_layout()
@@ -728,7 +709,6 @@ def attitude_calculate(data):
     高振动环境：KP=0.1-0.5, KI=0.0-0.001
     '''
     ahrs = MahonyAHRS(sample_freq=50.0, kp=0.409, ki=0.008)
-    # ahrs = MadgwickAHRS(sample_freq=50.0, beta=0.1)
 
     # 模拟传感器数据（示例）
     dt = 0.02  # 20ms 时间步长
@@ -841,24 +821,23 @@ def gravity_calculate(attidudes):
         g_xyz['z'].append(gz)
     return g_xyz
 
-def calculate_displacement(accel, dt):
-    displacement = {'x': [], 'y': [], 'z': []}
+# accel={'x':[],'y':[],'z':[]} [m/s²]
+def calculate_position(accel, dt):
+    positions = {'x': [], 'y': [], 'z': []}
+    print(accel)
     for axis in ['x', 'y', 'z']:
-        # 转换为numpy数组并去均值
-        acc = np.array(accel[axis])
-        acc = acc - np.mean(acc)
-        
-        # 计算速度并去均值
-        velocity = np.cumsum(acc) * dt
-        velocity -= np.mean(velocity)
-        
-        # 计算位移并去线性趋势
-        disp = np.cumsum(velocity) * dt
-        disp = signal.detrend(disp, type='linear')
-        
-        displacement[axis] = disp.tolist()
-    
-    return displacement
+        v = 0.0  # 初始速度
+        s = 0.0  # 初始位移
+        positions[axis] = []
+        for a in accel[axis]:
+            v_new = v + a * dt        # 积分加速度得到新速度
+            # ds = 0.5 * (v + v_new) * dt  # 使用平均速度计算位移增量
+            ds = v * dt + 0.5 * a * dt * dt # 使用平均速度计算位移增量
+            s += ds
+            positions[axis].append(s)
+            # v = v_new  # 更新速度
+            v = v + a * dt
+    return positions
 
 # 主函数
 def main():
@@ -873,54 +852,33 @@ def main():
 
     try:
         original_data = parse_mpu6050_data(file_path)
-        
         # 应用滤波
         filtered_data = apply_filters(original_data, window_size)
         
-        
-        if build_models:
-            # 建立误差模型
-            # models_gyro = build_calibration_gyro_model(filtered_data['temp'],filtered_data)
-            # 保存三个轴的校准模型到单个文件
-            # joblib.dump(models_gyro, calibration_gyro_models)
+        # 温度转换
+        conver_data = convertTemp(filtered_data)
+        # 加速度转换(g)
+        conver_data = convertAccel(conver_data)
+        # 角速度转换
+        conver_data = convertGyro(conver_data)
 
-            models_accel = build_calibration_accel_model(filtered_data)
-            joblib.dump(models_accel, calibration_accel_models)
 
-        
         # 从单个文件加载全部模型
         models_gyro = joblib.load(calibration_gyro_models)
         models_accel = joblib.load(calibration_accel_models)
+        # display_model_expressions(models_gyro)
+        # display_model_expressions(models_accel)
         
-        display_model_expressions(models_gyro)
-        
-        # 评估模型
-        metrics = evaluate_model(models_gyro,filtered_data['temp'],filtered_data)
-        
-        # 使用模型修正数据
-        # calibrated_data = {'gyro_x':[],'gyro_y':[],'gyro_z':[]}
-        # for i in range(len(filtered_data['gyro_x'])):
-        #     calibrated_gyro = calibrate_gyro(filtered_data['temp'][i],[filtered_data['gyro_x'][i],filtered_data['gyro_y'][i],filtered_data['gyro_z'][i]],models_gyro)
-        #     calibrated_data['gyro_x'].append(calibrated_gyro[0])
-        #     calibrated_data['gyro_y'].append(calibrated_gyro[1])
-        #     calibrated_data['gyro_z'].append(calibrated_gyro[2])
-
         # 零偏校准
-        calibrated_data = calibrate_accel(filtered_data, models_accel)
-        calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'], calibrated_data, models_gyro)
-        # calibrated_data = vectorized_calibrate_gyro(filtered_data['temp'], filtered_data, models_gyro)
-        visualize_mpu6050_data(original_data, filtered_data, calibrated_data, calibrated_data)
+        # calibrated_data = calibrate_accel(conver_data, models_accel)
+        # calibrated_data = vectorized_calibrate_gyro(calibrated_data, models_gyro)
+        calibrated_data = calibrate_accel_bias(conver_data)
+        calibrated_data = vectorized_calibrate_gyro(calibrated_data, models_gyro)
+        visualize_mpu6050_data(original_data, filtered_data, calibrated_data)
 
-        
-        # 温度转换
-        temperatures = convertTemp(calibrated_data)
-        # 加速度转换(g)
-        accel_g = convertAccel(calibrated_data)
-        # 角速度转换
-        gyro_dps = convertGyro(calibrated_data)
 
-        angles = attitude_calculate({'tamp':original_data['tamp'],**accel_g,**gyro_dps})
-        # angles = attitude_integral({'tamp':original_data['tamp'], **accel_g, **gyro_dps})
+        angles = attitude_calculate(calibrated_data)
+        # angles = attitude_integral(calibrated_data)
     
         # 计算重力加速度在x,y,z轴上的分量
         # {'x':[],'y':[],'z':[]}
@@ -932,20 +890,20 @@ def main():
         
         # 计算物体的运动加速度
         accel = {}
-        accel['x'] = accel_g['accel_x'] - g_xyz['x']
-        accel['y'] = accel_g['accel_y'] - g_xyz['y']
-        accel['z'] = accel_g['accel_z'] - g_xyz['z']
+        accel['x'] = (calibrated_data['accel_x'] - g_xyz['x'])*g
+        accel['y'] = (calibrated_data['accel_y'] - g_xyz['y'])*g
+        accel['z'] = (calibrated_data['accel_z'] - g_xyz['z'])*g
 
         # 计算位移
-        displacement = calculate_displacement(accel=accel, dt=1.0/50)
+        positions = calculate_position(accel=accel, dt=1.0/50)
 
-        visualize_calibrate_data({'tamp':original_data['tamp'],**accel_g,**gyro_dps},
+        visualize_calibrate_data({**calibrated_data, 'tamp':original_data['tamp']},
                                  angles=angles,
                                  gravity=g_xyz,
                                  accel=accel,
-                                 displacement=displacement)
+                                 positions=positions)
 
-        show_animate(angles)
+        # show_animate(angles, positions)
         plt.show()
     except Exception as e:
         print(f"处理数据时出错: {e}")
