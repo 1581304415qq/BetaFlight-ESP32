@@ -1,4 +1,5 @@
 #include "imu.h"
+#include "imu_types.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -13,11 +14,11 @@
 #include <stdio.h>
 #include <math.h>
 
-#define I2C_MASTER_FREQ_HZ_MAX            (1250000) // 1.25 MHz
-#define I2C_MASTER_FREQ_HZ_1250K          (1250000) // 1.25 MHz
-#define I2C_MASTER_FREQ_HZ_1000K          (1000000) // 1 MHz  
-#define I2C_MASTER_FREQ_HZ_400K           (400000)  // 400 KHz
-#define I2C_MASTER_FREQ_HZ_100K           (100000)  // 100 KHz
+#define I2C_MASTER_FREQ_HZ_MAX (1250000)   // 1.25 MHz
+#define I2C_MASTER_FREQ_HZ_1250K (1250000) // 1.25 MHz
+#define I2C_MASTER_FREQ_HZ_1000K (1000000) // 1 MHz
+#define I2C_MASTER_FREQ_HZ_400K (400000)   // 400 KHz
+#define I2C_MASTER_FREQ_HZ_100K (100000)   // 100 KHz
 
 #define I2C_MASTER_TIMEOUT_MS 1000
 #define I2C_MASTER_NUM 0
@@ -29,23 +30,21 @@
 
 static EventGroupHandle_t s_imu_event_group;
 
-
 static mpu6050_handle_t mpu6050 = NULL;
 static i2c_master_bus_handle_t bus_handle;
 static i2c_master_dev_handle_t dev_handle;
 
-#define TASK_STACK_SIZE 1024*10
+#define TASK_STACK_SIZE 1024 * 10
 #define TAG "BETA FLIGHT IMU"
 
-volatile float twoKp = (2.0 * 0.246f);	// 2 * proportional gain 比例增益
-volatile float twoKi = (2.0 * 0.00035f);	// 2 * integral gain     积分增益
-volatile float sampleFreq = 200.0f;	    // sample frequency in Hz
-volatile float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f;   // quaternion of sensor frame relative to auxiliary frame
-static float yaw, pitch, roll;
+volatile float twoKp = (2.0 * 0.246f);                     // 2 * proportional gain 比例增益
+volatile float twoKi = (2.0 * 0.00035f);                   // 2 * integral gain     积分增益
+volatile float sampleFreq = 200.0f;                        // sample frequency in Hz
+volatile float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f; // quaternion of sensor frame relative to auxiliary frame
 
 typedef void (*imu_data_callback_t)(
-    mpu6050_raw_acce_value_t* mpu6050_raw_acce_value,
-    mpu6050_raw_gyro_value_t* mpu6050_raw_gyro_value,
+    mpu6050_raw_acce_value_t *mpu6050_raw_acce_value,
+    mpu6050_raw_gyro_value_t *mpu6050_raw_gyro_value,
     int16_t mpu6050_temp_value);
 static imu_data_callback_t imu_data_callback = NULL;
 
@@ -84,122 +83,153 @@ static void i2c_sensor_mpu6050_init(void)
     i2c_bus_init();
     mpu6050 = mpu6050_create(dev_handle, MPU6050_I2C_ADDRESS);
 
-    while ((ret = mpu6050_wake_up(mpu6050)) != ESP_OK) {
+    while ((ret = mpu6050_wake_up(mpu6050)) != ESP_OK)
+    {
         printf("mpu6050 wake up ret=%d\n", ret);
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
-    while ((ret = mpu6050_config(mpu6050, ACCE_FS_2G, GYRO_FS_250DPS)) != ESP_OK) {
+    while ((ret = mpu6050_config(mpu6050, ACCE_FS_2G, GYRO_FS_250DPS)) != ESP_OK)
+    {
         printf("mpu6050 config ret=%d\n", ret);
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
     mpu6050_sample_rate(mpu6050, 50);
 }
 
-#define  RAD2DEG 57.29577951f
-static void quaternion2Angle() {
-    // yaw = atan2(2 * q1 * q2 - 2 * q0 * q3, 2 * q0 * q0 + 2 * q1 * q1 - 1) * RAD2DEG;
-    // pitch = -asin(2 * q1 * q3 + 2 * q0 * q2) * RAD2DEG;
-    // roll = atan2(2 * q2 * q3 - 2 * q0 * q1, 2 * q0 * q0 + 2 * q3 * q3 - 1) * RAD2DEG;
-    roll = atan2(2 * q0 * q1 + 2 * q2 * q3, 1 - 2 * q1 * q1 - 2 * q2 * q2) * RAD2DEG;
-    pitch = asin(2 * q0 * q2 - 2 * q3 * q1) * RAD2DEG;
-    yaw = atan2(2 * q0 * q3 + 2 * q1 * q2, 1 - 2 * q2 * q2 - 2 * q3 * q3) * RAD2DEG;
-    // yaw = -atan2(2.0f * (q1 * q2 + q0 * q3), q0 * q0 + q1 * q1 - q2 * q2 - q3 * q3) * RAD2DEG;
-    // pitch = asin(2.0f * (q1 * q3 - q0 * q2)) * RAD2DEG;
-    // roll = atan2(2.0f * (q0 * q1 + q2 * q3), q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3) * RAD2DEG;
+#define RAD2DEG 57.29577951f
+static void quaternion2Angle(float *roll, float *pitch, float *yaw)
+{
+    // 计算欧拉角
+    // *yaw = atan2(2 * q1 * q2 - 2 * q0 * q3, 2 * q0 * q0 + 2 * q1 * q1 - 1) * RAD2DEG;
+    // *pitch = -asin(2 * q1 * q3 + 2 * q0 * q2) * RAD2DEG;
+    // *roll = atan2(2 * q2 * q3 - 2 * q0 * q1, 2 * q0 * q0 + 2 * q3 * q3 - 1) * RAD2DEG;
+    *roll = atan2(2 * q0 * q1 + 2 * q2 * q3, 1 - 2 * q1 * q1 - 2 * q2 * q2) * RAD2DEG;
+    *pitch = asin(2 * q0 * q2 - 2 * q3 * q1) * RAD2DEG;
+    *yaw = atan2(2 * q0 * q3 + 2 * q1 * q2, 1 - 2 * q2 * q2 - 2 * q3 * q3) * RAD2DEG;
+    // *yaw = -atan2(2.0f * (q1 * q2 + q0 * q3), q0 * q0 + q1 * q1 - q2 * q2 - q3 * q3) * RAD2DEG;
+    // *pitch = asin(2.0f * (q1 * q3 - q0 * q2)) * RAD2DEG;
+    // *roll = atan2(2.0f * (q0 * q1 + q2 * q3), q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3) * RAD2DEG;
 }
-
 
 // 默认取样个数
 #define DEFAULT_CALIBRATION_NUMSAMPLES 1000
 // 误差抖动 阈值
-#define DEFAULT_CALIBRATION_ACCEL_DEADZONE  0.01f*0.01f
-#define DEFAULT_CALIBRATION_GYRO_DEADZONE  0.01f*0.01f
+#define DEFAULT_CALIBRATION_ACCEL_DEADZONE 0.01f * 0.01f
+#define DEFAULT_CALIBRATION_GYRO_DEADZONE 2000
 
+enum IMU_STATE
+{
+    IMU_STATE_IDLE = 0,
+    IMU_STATE_CALIBRATE,
+    IMU_STATE_READ,
+    IMU_STATE_PROCESS,
+};
+
+#define GYRO_NBR_OF_AXES 3
+#define DEFAULT_CALIBRATION_NUMSAMPLES 1000
+#define GYRO_MIN_BIAS_TIMEOUT_MS        M2T(1*1000)
+int32_t varianceSampleTime;
+
+typedef union
+{
+    struct
+    {
+        int16_t x;
+        int16_t y;
+        int16_t z;
+    };
+    int16_t axis[3];
+} Axis3i16;
 struct Calibrate
 {
-    mpu6050_acce_value_t acce;
-    mpu6050_gyro_value_t gyro;
-} calibrate;
+    Axis3i16 accel_buffer[DEFAULT_CALIBRATION_NUMSAMPLES];
+    Axis3i16 gyro_buffer[DEFAULT_CALIBRATION_NUMSAMPLES];
+    float acce_sensitivity;
+    float gyro_sensitivity;
+};
 
-void calculateMean(uint32_t numsample, struct Calibrate* calibrate) {
-    mpu6050_acce_value_t acce;
-    mpu6050_gyro_value_t gyro;
-
-    float pre_avg[7] = { 0 };    // 存储取样数量的和
-    for (uint32_t i = 0; i < numsample;i++) {
-        while (mpu6050_get_acce(mpu6050, &acce));
-        while (mpu6050_get_gyro(mpu6050, &gyro));
-
-        pre_avg[0] += (acce.acce_x - 1);
-        pre_avg[1] += acce.acce_y;
-        pre_avg[2] += acce.acce_z;
-        pre_avg[3] += gyro.gyro_x;
-        pre_avg[4] += gyro.gyro_y;
-        pre_avg[5] += gyro.gyro_z;
-        // pre_avg[6] += temp;
-    }
-
-    calibrate->acce.acce_x = (float)(pre_avg[0] / numsample);
-    calibrate->acce.acce_y = (float)(pre_avg[1] / numsample);
-    calibrate->acce.acce_z = (float)(pre_avg[2] / numsample);
-    calibrate->gyro.gyro_x = (float)(pre_avg[3] / numsample);
-    calibrate->gyro.gyro_y = (float)(pre_avg[4] / numsample);
-    calibrate->gyro.gyro_z = (float)(pre_avg[5] / numsample);
-
-}
-
-void read_imu_calibrate(
-    mpu6050_acce_value_t* acce,
-    mpu6050_gyro_value_t* gyro,
-    mpu6050_temp_value_t* temp
-) {
-    // 检查校准后的误差
-    while (mpu6050_get_acce(mpu6050, acce));
-    while (mpu6050_get_gyro(mpu6050, gyro));
-    while (mpu6050_get_temp(mpu6050, temp));
-
-    ESP_LOGI(TAG, "raw:%.5f, %.5f, %.5f, %.5f, %.5f, %.5f\n",
-        acce->acce_x, acce->acce_y, acce->acce_z,
-        gyro->gyro_x, gyro->gyro_y, gyro->gyro_z
-    );
-    acce->acce_x -= calibrate.acce.acce_x;
-    acce->acce_y -= calibrate.acce.acce_y;
-    acce->acce_z -= calibrate.acce.acce_z;
-    gyro->gyro_x -= calibrate.gyro.gyro_x;
-    gyro->gyro_y -= calibrate.gyro.gyro_y;
-    gyro->gyro_z -= calibrate.gyro.gyro_z;
-
-}
-
-int imu_calibrate()
+struct IMU
 {
-    esp_err_t ret;
-    mpu6050_acce_value_t acce;
-    mpu6050_gyro_value_t gyro;
-    mpu6050_temp_value_t temp;
+    enum IMU_STATE state;
+    struct Calibrate *calibrate;
+    mpu6050_acce_value_t bias_accel;
+    mpu6050_gyro_value_t bias_gyro;
 
-    for (int i = 0;i < 10;i++)
+    mpu6050_raw_acce_value_t mpu6050_raw_acce_value;
+    mpu6050_raw_gyro_value_t mpu6050_raw_gyro_value;
+    int16_t mpu6050_temp_value;
+    float yaw;
+    float pitch;
+    float roll;
+} imu;
+
+static void calcMean(Axis3i16 *sample, Axis3f *mean)
+{
+    int64_t sum[GYRO_NBR_OF_AXES] = {0};
+
+    for (int i = 0; i < DEFAULT_CALIBRATION_NUMSAMPLES; i++)
     {
-        // 读取采用数平均值
-        calculateMean(DEFAULT_CALIBRATION_NUMSAMPLES, &calibrate);
-        vTaskDelay(200 / portTICK_PERIOD_MS);
-
-        // 检查校准后的误差
-        read_imu_calibrate(&acce, &gyro, &temp);
-
-        if (acce.acce_z * acce.acce_z > DEFAULT_CALIBRATION_ACCEL_DEADZONE
-            || acce.acce_y * acce.acce_y > DEFAULT_CALIBRATION_ACCEL_DEADZONE
-            || (acce.acce_x - 1) * (acce.acce_x - 1) > DEFAULT_CALIBRATION_ACCEL_DEADZONE
-            || gyro.gyro_x * gyro.gyro_x > DEFAULT_CALIBRATION_GYRO_DEADZONE
-            || gyro.gyro_y * gyro.gyro_y > DEFAULT_CALIBRATION_GYRO_DEADZONE
-            || gyro.gyro_z * gyro.gyro_z > DEFAULT_CALIBRATION_GYRO_DEADZONE
-            )   continue;
-
-        return 0;
+        sum[0] += sample[i].x;
+        sum[1] += sample[i].y;
+        sum[2] += sample[i].z;
     }
-    return 1;
+
+    mean->x = (float)sum[0] / DEFAULT_CALIBRATION_NUMSAMPLES;
+    mean->y = (float)sum[1] / DEFAULT_CALIBRATION_NUMSAMPLES;
+    mean->z = (float)sum[2] / DEFAULT_CALIBRATION_NUMSAMPLES;
 }
 
+/**
+ * @brief 计算方差和均值
+ * @param bias 偏差
+ * @param variance 方差
+ * @param mean 均值
+ */
+static void calcVarianceAndMean(Axis3i16 *bias, Axis3f *variance, Axis3f *mean)
+{
+    int64_t sumSquared[GYRO_NBR_OF_AXES] = {0};
+
+    for (int i = 0; i < DEFAULT_CALIBRATION_NUMSAMPLES; i++)
+    {
+        sumSquared[0] += bias[i].x * bias[i].x;
+        sumSquared[1] += bias[i].y * bias[i].y;
+        sumSquared[2] += bias[i].z * bias[i].z;
+    }
+    calcMean(bias, mean);
+
+    variance->x = fabs(sumSquared[0] / DEFAULT_CALIBRATION_NUMSAMPLES - mean->x * mean->x);
+    variance->y = fabs(sumSquared[1] / DEFAULT_CALIBRATION_NUMSAMPLES - mean->y * mean->y);
+    variance->z = fabs(sumSquared[2] / DEFAULT_CALIBRATION_NUMSAMPLES - mean->z * mean->z);
+}
+bool imu_calibrate(struct IMU *imu)
+{
+    // 读取采用数平均值
+    Axis3f mean;
+    calcMean(imu->calibrate->accel_buffer, &mean);
+    mpu6050_get_acce_sensitivity(mpu6050, &imu->calibrate->acce_sensitivity);
+    mpu6050_get_gyro_sensitivity(mpu6050, &imu->calibrate->gyro_sensitivity);
+    imu->bias_accel.acce_x = (int16_t)(mean.x + 0.5f);
+    imu->bias_accel.acce_y = (int16_t)(mean.y + 0.5f);
+    imu->bias_accel.acce_z = (int16_t)(mean.z + 0.5f) - imu->calibrate->acce_sensitivity;
+
+
+    Axis3f variance;
+    calcVarianceAndMean(imu->calibrate->gyro_buffer, &variance, &mean);
+
+    if (variance.x < DEFAULT_CALIBRATION_GYRO_DEADZONE
+        && variance.y < DEFAULT_CALIBRATION_GYRO_DEADZONE
+        && variance.z < DEFAULT_CALIBRATION_GYRO_DEADZONE
+        // && (varianceSampleTime + GYRO_MIN_BIAS_TIMEOUT_MS < xTaskGetTickCount())
+        )
+      {
+        varianceSampleTime = xTaskGetTickCount();
+        imu->bias_gyro.gyro_x = (int16_t)(mean.x + 0.5f);
+        imu->bias_gyro.gyro_y = (int16_t)(mean.y + 0.5f);
+        imu->bias_gyro.gyro_z = (int16_t)(mean.z + 0.5f);
+        return true;
+      }
+    return false;
+}
 
 static void calculateVelocity(
     float acce_x,
@@ -207,8 +237,8 @@ static void calculateVelocity(
     float acce_z,
     float pitch_rad,
     float roll_rad,
-    float yaw_rad
-) {
+    float yaw_rad)
+{
     static float velocity_x, velocity_y, velocity_z;
 
     rotate_vector(&acce_x, &acce_y, &acce_z, roll_rad, pitch_rad, yaw_rad);
@@ -219,54 +249,91 @@ static void calculateVelocity(
     velocity_y += (acce_y * g / sampleFreq);
     velocity_z += ((acce_z - 1.0) * g / sampleFreq);
     ESP_LOGI(TAG, "velocity:%.3f, %.3f, %.3f\n", velocity_x, velocity_y, velocity_z);
-
 }
 
 #define DATA_READY_BIT BIT0
-#define ERROR_BIT      BIT1
+#define ERROR_BIT BIT1
 
-static void imuTask(void* param) {
+static void imuTask(void *param)
+{
     esp_err_t ret;
-    mpu6050_raw_acce_value_t mpu6050_raw_acce_value;
-    mpu6050_raw_gyro_value_t mpu6050_raw_gyro_value;
-    int16_t mpu6050_temp_value;
 
     uint8_t mpu6050_deviceid = 0;
     ret = mpu6050_get_deviceid(mpu6050, &mpu6050_deviceid);
     ESP_LOGI(TAG, "ret=%d, mpu6050_deviceid=0x%x\n", ret, mpu6050_deviceid);
 
+    uint32_t calibrate_count = 0;
 #ifdef CONFIG_IMU_INT_ENABLE
     while (1)
     {
         EventBits_t bits = xEventGroupWaitBits(s_imu_event_group,
-            DATA_READY_BIT | ERROR_BIT,
-            pdFALSE,
-            pdFALSE,
-            portMAX_DELAY);
+                                               DATA_READY_BIT | ERROR_BIT,
+                                               pdFALSE,
+                                               pdFALSE,
+                                               portMAX_DELAY);
 
         uint8_t out_intr_status = 0;
         mpu6050_get_interrupt_status(mpu6050, &out_intr_status);
         ESP_LOGD(TAG, "imu read readed %d", out_intr_status);
+        if (bits == DATA_READY_BIT && mpu6050_is_data_ready_interrupt(out_intr_status))
+        {
+            int ret = 0;
+            // 使用一个状态机控制， 1，校准 2，读取数据 3，处理数据
+            switch (imu.state)
+            {
+            case IMU_STATE_IDLE:
+                // 采集数据校准需要数据
+                ret = mpu6050_get_raw_data(
+                    mpu6050,
+                    &imu.calibrate->accel_buffer[calibrate_count],
+                    &imu.calibrate->gyro_buffer[calibrate_count],
+                    NULL);
+                if (++calibrate_count == DEFAULT_CALIBRATION_NUMSAMPLES)
+                {
+                    calibrate_count = 0;
+                    imu.state = IMU_STATE_CALIBRATE;
+                    ESP_LOGI(TAG, "imu calibrate start");
+                }
+                break;
+            case IMU_STATE_CALIBRATE:
+                if (imu_calibrate(&imu) == 0)
+                {
+                    imu.state = IMU_STATE_READ;
+                    ESP_LOGI(TAG, "imu calibrate success");
+                }
+                else
+                {
+                    imu.state = IMU_STATE_IDLE;
+                    ESP_LOGI(TAG, "imu calibrate failed");
+                }
+                break;
+            case IMU_STATE_READ:
+                ret = mpu6050_get_raw_data(
+                    mpu6050,
+                    &imu.mpu6050_raw_acce_value,
+                    &imu.mpu6050_raw_gyro_value,
+                    &imu.mpu6050_temp_value);
+                imu.mpu6050_raw_acce_value.raw_acce_x -= imu.bias_accel.acce_x;
+                imu.mpu6050_raw_acce_value.raw_acce_y -= imu.bias_accel.acce_y;
+                imu.mpu6050_raw_acce_value.raw_acce_z -= imu.bias_accel.acce_z;
+                imu.mpu6050_raw_gyro_value.raw_gyro_x -= imu.bias_gyro.gyro_x;
+                imu.mpu6050_raw_gyro_value.raw_gyro_y -= imu.bias_gyro.gyro_y;
+                imu.mpu6050_raw_gyro_value.raw_gyro_z -= imu.bias_gyro.gyro_z;
+                ESP_LOGD(TAG, "ret=%d,"
+                              "Accel: X=%6d, Y=%6d, Z=%6d\n",
+                         ret,
+                         imu.mpu6050_raw_acce_value.raw_acce_x, imu.mpu6050_raw_acce_value.raw_acce_y, imu.mpu6050_raw_acce_value.raw_acce_z);
 
-        if (bits == DATA_READY_BIT && mpu6050_is_data_ready_interrupt(out_intr_status)) {
-            ret = mpu6050_get_raw_data(
-                mpu6050,
-                &mpu6050_raw_acce_value,
-                &mpu6050_raw_gyro_value,
-                &mpu6050_temp_value
-            );
-            ESP_LOGD(TAG, "ret=%d,"
-                "Accel: X=%6d, Y=%6d, Z=%6d\n", ret,
-                mpu6050_raw_acce_value.raw_acce_x, mpu6050_raw_acce_value.raw_acce_y, mpu6050_raw_acce_value.raw_acce_z
-            );
-            if (imu_data_callback)
-                imu_data_callback(
-                    &mpu6050_raw_acce_value,
-                    &mpu6050_raw_gyro_value,
-                    mpu6050_temp_value
-                );
+                if (imu_data_callback)
+                    imu_data_callback(&imu.mpu6050_raw_acce_value, &imu.mpu6050_raw_gyro_value, imu.mpu6050_temp_value);
+                break;
+            case IMU_STATE_PROCESS:
+                // MahonyAHRSupdateIMU(gyro.gyro_x / RAD2DEG, gyro.gyro_y / RAD2DEG, gyro.gyro_z / RAD2DEG, acce.acce_x, acce.acce_y, acce.acce_z);
+
+                // quaternion2Angle();
+                break;
+            }
         }
-    }
 
 #else
     mpu6050_acce_value_t acce;
@@ -279,32 +346,26 @@ static void imuTask(void* param) {
             mpu6050,
             &mpu6050_raw_acce_value,
             &mpu6050_raw_gyro_value,
-            &mpu6050_temp_value
-        );
+            &mpu6050_temp_value);
         ESP_LOGD(TAG, "ret=%d,"
-            "Accel: X=%6d, Y=%6d, Z=%6d\n", ret,
-            mpu6050_raw_acce_value.raw_acce_x, mpu6050_raw_acce_value.raw_acce_y, mpu6050_raw_acce_value.raw_acce_z
-        );
+                      "Accel: X=%6d, Y=%6d, Z=%6d\n",
+                 ret,
+                 mpu6050_raw_acce_value.raw_acce_x, mpu6050_raw_acce_value.raw_acce_y, mpu6050_raw_acce_value.raw_acce_z);
         if (imu_data_callback)
             imu_data_callback(
                 &mpu6050_raw_acce_value,
                 &mpu6050_raw_gyro_value,
-                mpu6050_temp_value
-            );
+                mpu6050_temp_value);
         vTaskDelay((1000 / 50) / portTICK_PERIOD_MS);
     }
 
 #endif
-
-// MahonyAHRSupdateIMU(gyro.gyro_x / RAD2DEG, gyro.gyro_y / RAD2DEG, gyro.gyro_z / RAD2DEG, acce.acce_x, acce.acce_y, acce.acce_z);
-
-// quaternion2Angle();
-
+    }
 }
 
-static void IRAM_ATTR imu_isr_handler(void* arg)
+static void IRAM_ATTR imu_isr_handler(void *arg)
 {
-    mpu6050_handle_t* mpu6050_handle = (mpu6050_handle_t*)arg;
+    mpu6050_handle_t *mpu6050_handle = (mpu6050_handle_t *)arg;
 
     // 清除按键按下标志位，防止重复触发
     xEventGroupClearBitsFromISR(s_imu_event_group, DATA_READY_BIT);
@@ -320,7 +381,9 @@ static void IRAM_ATTR imu_isr_handler(void* arg)
 }
 
 static TaskHandle_t xHandle = NULL;
-void imuInit(void) {
+void imuInit(void)
+{
+    imu.calibrate = malloc(sizeof(struct Calibrate));
     i2c_sensor_mpu6050_init();
 
 #ifdef CONFIG_IMU_INT_ENABLE
@@ -340,7 +403,8 @@ void imuInit(void) {
     mpu6050_get_interrupt_status(mpu6050, &out_intr_status);
 }
 
-void imuDeinit(void) {
+void imuDeinit(void)
+{
     // 结束线程
     if (xHandle != NULL)
     {
@@ -352,7 +416,7 @@ void imuDeinit(void) {
     i2c_del_master_bus(bus_handle);
 }
 
-int imuStart(void* callback)
+int imuStart(void *callback)
 {
     imu_data_callback = callback;
     return xTaskCreate(imuTask, "imu_task", TASK_STACK_SIZE, NULL, 10, &xHandle);
